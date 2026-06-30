@@ -41,7 +41,7 @@ jobs:
               "mkdir -p /home/ec2-user",
 
               "echo ==== Clone Repository (First Time Only) ====",
-              "if [ ! -d /home/ec2-user/dashboard/.git ]; then git clone https://${{ secrets.GITHUB_TOKEN_APP }}@github.com/kashifsayyad09/pipeline-dashboard.git /home/ec2-user/dashboard; fi",
+              "if [ ! -d /home/ec2-user/dashboard/.git ]; then git clone https://${{ secrets.TOKEN_APP }}@github.com/kashifsayyad09/pipeline-dashboard.git /home/ec2-user/dashboard; fi",
 
               "echo ==== Updating Repository ====",
               "cd /home/ec2-user/dashboard",
@@ -52,7 +52,7 @@ jobs:
               "echo ==== Creating .env ====",
               "cp -f .env.example .env || touch .env",
 
-              "grep -q '^GITHUB_TOKEN=' .env && sed -i 's|^GITHUB_TOKEN=.*|GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN_APP }}|' .env || echo 'GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN_APP }}' >> .env",
+              "grep -q '^GITHUB_TOKEN=' .env && sed -i 's|^GITHUB_TOKEN=.*|GITHUB_TOKEN=${{ secrets.TOKEN_APP }}|' .env || echo 'GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN_APP }}' >> .env",
 
               "grep -q '^GITHUB_API_URL=' .env && sed -i 's|^GITHUB_API_URL=.*|GITHUB_API_URL=${{ secrets.GITHUB_API_URL }}|' .env || echo 'GITHUB_API_URL=${{ secrets.GITHUB_API_URL }}' >> .env",
 
