@@ -42,12 +42,11 @@ jobs:
               "git fetch origin",
               "git reset --hard origin/main",
 
-              "rm -f .env.example",
+             "if [ -f .env.example ]; then cp .env.example .env; else touch .env; fi",
 
-              "touch .env",
+              "echo '' >> .env",
 
               "echo GITHUB_TOKEN=${{ secrets.TOKEN_APP }} >> .env",
-              
               "echo GITHUB_API_URL=${{ secrets.API_URL }} >> .env",
 
               "echo ==== .env ==== ",
