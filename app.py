@@ -541,6 +541,9 @@ def init_session():
         "page": "Dashboard",
         "last_refresh": None,
         "search_query": "",
+        # Tracks whether we've already attempted auto-auth this session,
+        # so reruns don't re-trigger API calls on every interaction.
+        "auto_auth_attempted": False,
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -549,6 +552,71 @@ def init_session():
 
 def get_client() -> Optional[GitHubClient]:
     return st.session_state.get("client")
+
+
+def clear_auth_session():
+    """Reset all auth-related session state, forcing the Connect page."""
+    st.session_state.token = ""
+    st.session_state.client = None
+    st.session_state.user = None
+    st.session_state.orgs = []
+    st.session_state.repos = []
+    st.session_state.selected_repo = None
+    st.session_state.selected_org = None
+    st.session_state.selected_branch = None
+    st.session_state.selected_workflow = None
+
+
+def auto_authenticate():
+    """
+    Automatically authenticate using a token already present in
+    st.session_state.token (sourced from .env at startup) — without
+    requiring the user to click Connect.
+
+    Runs at most once per session: guarded by `auto_auth_attempted`
+    so Streamlit reruns (widget interactions, page nav, etc.) don't
+    re-fire authentication calls against the GitHub API every time.
+
+    If a client/user already exist in session_state (e.g. from a
+    prior manual Connect), this is a no-op.
+    """
+    # Already authenticated this session — nothing to do.
+    if st.session_state.get("client") and st.session_state.get("user"):
+        return
+
+    # Already tried once (and presumably failed, or there was no
+    # token) — don't retry on every rerun.
+    if st.session_state.get("auto_auth_attempted"):
+        return
+
+    st.session_state.auto_auth_attempted = True
+
+    token = st.session_state.get("token", "")
+    if not token:
+        return  # No token in .env → fall through to Connect page.
+
+    base_url = st.session_state.get("base_url", GITHUB_API)
+
+    try:
+        client = GitHubClient(token, base_url)
+        user = client.get_user()
+
+        if not user or not user.get("login"):
+            # Invalid/expired token — clear it so the Connect page shows
+            # cleanly instead of a half-authenticated state.
+            clear_auth_session()
+            return
+
+        orgs = client.get_orgs()
+
+        st.session_state.client = client
+        st.session_state.user = user
+        st.session_state.orgs = orgs or []
+
+    except Exception:
+        # Network error, malformed token, etc. — fail safe to Connect page
+        # rather than crashing the app on startup.
+        clear_auth_session()
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -987,11 +1055,12 @@ def render_sidebar():
                             st.session_state.user = user
                             orgs = st.session_state.client.get_orgs()
                             st.session_state.orgs = orgs
+                            st.session_state.auto_auth_attempted = True  # already authenticated, skip auto-auth
                             st.success(f"✅ Connected as **{user['login']}**")
                             st.rerun()
                         else:
                             st.error("Authentication failed.")
-                            st.session_state.token = ""
+                            clear_auth_session()
             return
 
         # Connected state
@@ -1074,9 +1143,8 @@ def render_sidebar():
                     st.rerun()
             with col2:
                 if st.button("🚪 Logout", use_container_width=True):
-                    for k in ["token","client","user","orgs","repos","selected_repo",
-                               "selected_org","selected_branch","selected_workflow"]:
-                        st.session_state[k] = None if k != "token" else ""
+                    clear_auth_session()
+                    st.session_state.auto_auth_attempted = True  # prevent .env token re-login this session
                     st.rerun()
 
 
@@ -1815,6 +1883,7 @@ def page_settings():
 def main():
     init_session()
     inject_css()
+    auto_authenticate()
     render_sidebar()
 
     client = get_client()
