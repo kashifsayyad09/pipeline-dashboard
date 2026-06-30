@@ -42,10 +42,16 @@ jobs:
               "git fetch origin",
               "git reset --hard origin/main",
 
-              "cp -f .env.example .env || touch .env",
+              "rm -f .env.example",
 
-              "echo GITHUB_TOKEN=${{ secrets.TOKEN_APP }} > .env",
+              "touch .env",
+
+              "echo GITHUB_TOKEN=${{ secrets.TOKEN_APP }} >> .env",
+              
               "echo GITHUB_API_URL=${{ secrets.API_URL }} >> .env",
+
+              "echo ==== .env ==== ",
+              "cat .env",
 
               "rm -rf venv",
               "python3 -m venv venv",
