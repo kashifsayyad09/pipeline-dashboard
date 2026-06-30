@@ -31,45 +31,48 @@ jobs:
             --instance-ids "i-004e985e0bab8c1bf" \
             --document-name "AWS-RunShellScript" \
             --comment "Deploy Streamlit Dashboard" \
-            --parameters '{
-              "commands":[
-                "set -e",
+            --parameters 'commands=[
+              "set -e",
 
-                "sudo dnf install -y git python3 python3-pip",
+              "echo ==== Installing Packages ====",
+              "sudo dnf install -y git python3 python3-pip",
 
-                "mkdir -p /home/ec2-user",
+              "echo ==== Creating Project Directory ====",
+              "mkdir -p /home/ec2-user",
 
-                "if [ ! -d /home/ec2-user/dashboard/.git ]; then git clone https://'${{ secrets.GITHUB_TOKEN_APP }}'@github.com/kashifsayyad09/pipeline-dashboard.git /home/ec2-user/dashboard; fi",
+              "echo ==== Clone Repository (First Time Only) ====",
+              "if [ ! -d /home/ec2-user/dashboard/.git ]; then git clone https://${{ secrets.GITHUB_TOKEN_APP }}@github.com/kashifsayyad09/pipeline-dashboard.git /home/ec2-user/dashboard; fi",
 
-                "cd /home/ec2-user/dashboard",
+              "echo ==== Updating Repository ====",
+              "cd /home/ec2-user/dashboard",
+              "git reset --hard",
+              "git clean -fd",
+              "git pull origin main",
 
-                "git pull origin main",
+              "echo ==== Creating .env ====",
+              "cp -f .env.example .env || touch .env",
 
-                "echo GITHUB_TOKEN='${{ secrets.GITHUB_TOKEN_APP }}' > .env",
+              "grep -q '^GITHUB_TOKEN=' .env && sed -i 's|^GITHUB_TOKEN=.*|GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN_APP }}|' .env || echo 'GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN_APP }}' >> .env",
 
-                "echo GITHUB_API_URL='${{ secrets.GITHUB_API_URL }}' >> .env",
+              "grep -q '^GITHUB_API_URL=' .env && sed -i 's|^GITHUB_API_URL=.*|GITHUB_API_URL=${{ secrets.GITHUB_API_URL }}|' .env || echo 'GITHUB_API_URL=${{ secrets.GITHUB_API_URL }}' >> .env",
 
-                "python3 -m pip install --upgrade pip",
+              "echo ==== Installing Python Dependencies ====",
+              "python3 -m pip install -r requirements.txt",
 
-                "python3 -m pip install -r requirements.txt",
+              "echo ==== Stopping Existing Streamlit ====",
+              "pkill -f streamlit || true",
 
-                "python3 -m pip install streamlit",
+              "echo ==== Starting Streamlit ====",
+              "nohup streamlit run app.py --server.address 0.0.0.0 --server.port 8501 > streamlit.log 2>&1 &",
 
-                "pkill -f streamlit || true",
+              "sleep 15",
 
-                "nohup streamlit run app.py --server.address=0.0.0.0 --server.port=8501 > streamlit.log 2>&1 &",
+              "echo ==== Streamlit Log ====",
+              "cat streamlit.log || true",
 
-                "sleep 10",
-
-                "echo ===== STREAMLIT LOG =====",
-
-                "cat streamlit.log",
-
-                "echo ===== PROCESS =====",
-
-                "pgrep -af streamlit"
-              ]
-            }' \
+              "echo ==== Running Process ====",
+              "pgrep -af streamlit || true"
+            ]' \
             --query "Command.CommandId" \
             --output text)
 
@@ -95,9 +98,9 @@ jobs:
           echo "Deployment Status: $STATUS"
 
           if [ "$STATUS" != "Success" ]; then
-            echo "Deployment failed."
+            echo "❌ Deployment failed."
             exit 1
           fi
 
       - name: Deployment Complete
-        run: echo "✅ Streamlit deployed successfully."
+        run: echo "✅ Streamlit Dashboard deployed successfully."
