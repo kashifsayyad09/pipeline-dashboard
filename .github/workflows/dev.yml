@@ -31,7 +31,8 @@ jobs:
             --document-name "AWS-RunShellScript" \
             --parameters 'commands=[
               "set -e",
-              "sudo dnf install -y git python3 python3-pip python3.11 python3.11-pip",
+
+              "sudo dnf install -y git python3 python3-pip python3.11",
 
               "mkdir -p /home/ec2-user",
 
@@ -42,21 +43,21 @@ jobs:
               "git fetch origin",
               "git reset --hard origin/main",
 
-             "if [ -f .env.example ]; then cp .env.example .env; else touch .env; fi",
+              "rm -f .env",
 
-              "echo '' >> .env",
-
-              "echo GITHUB_TOKEN=${{ secrets.TOKEN_APP }} >> .env",
+              "echo GITHUB_TOKEN=${{ secrets.TOKEN_APP }} > .env",
               "echo GITHUB_API_URL=${{ secrets.API_URL }} >> .env",
 
-              "echo ==== .env ==== ",
+              "echo ==== ENV FILE ====",
               "cat .env",
 
               "rm -rf venv",
+
               "python3.11 -m venv venv",
 
-              "venv/bin/python -m ensurepip --upgrade",
-              "venv/bin/python -m pip install -U pip setuptools wheel",
+              "venv/bin/python --version",
+
+              "venv/bin/python -m pip install --upgrade pip setuptools wheel",
 
               "venv/bin/python -m pip install --no-cache-dir -r requirements.txt",
 
@@ -64,9 +65,12 @@ jobs:
 
               "nohup venv/bin/streamlit run app.py --server.address=0.0.0.0 --server.port=8501 > streamlit.log 2>&1 &",
 
-              "sleep 10",
+              "sleep 15",
 
+              "echo ==== STREAMLIT LOG ====",
               "cat streamlit.log || true",
+
+              "echo ==== PROCESS ====",
               "pgrep -af streamlit || true"
             ]' \
             --query "Command.CommandId" \
