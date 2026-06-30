@@ -347,8 +347,25 @@ def inject_css():
     }}
     .stButton > button:hover {{ opacity: 0.85; }}
 
-    /* Hide default streamlit header */
-    header[data-testid="stHeader"] {{ display: none; }}
+    /* Hide default streamlit chrome WITHOUT removing the sidebar toggle.
+       display:none on stHeader also kills the >> collapse/expand control,
+       which can strand users with no way to reopen a collapsed sidebar.
+       Instead we keep the header in the layout but make it visually
+       transparent, and explicitly force the toggle button to stay visible. */
+    header[data-testid="stHeader"] {{
+        background: transparent;
+        height: 3rem;
+    }}
+    header[data-testid="stHeader"] > * {{
+        visibility: hidden;
+    }}
+    /* Re-show only the sidebar collapse/expand control */
+    button[data-testid="stSidebarCollapseButton"],
+    button[data-testid="collapsedControl"],
+    [data-testid="stSidebarCollapsedControl"] {{
+        visibility: visible !important;
+        opacity: 1 !important;
+    }}
     #MainMenu {{ visibility: hidden; }}
     footer {{ visibility: hidden; }}
 
@@ -1168,6 +1185,15 @@ def page_not_connected():
     """, unsafe_allow_html=True)
 
 def page_no_repo():
+    repo_count = len(st.session_state.get("repos", []))
+    hint = ""
+    if repo_count == 0:
+        hint = f"""
+        <div class="warn-box" style="max-width:420px;margin:1rem auto;text-align:left;">
+          ⚠️ No repositories are loaded yet. If the sidebar isn't visible,
+          click the <strong>&raquo;</strong> arrow in the top-left corner to expand it.
+        </div>
+        """
     st.markdown(f"""
     <div class="empty-state" style="margin-top:3rem;">
       <div class="icon">📁</div>
@@ -1175,6 +1201,7 @@ def page_no_repo():
       <p style="color:{COLORS['muted']};">
         Choose a repository from the sidebar to view its GitHub Actions analytics.
       </p>
+      {hint}
     </div>
     """, unsafe_allow_html=True)
 
