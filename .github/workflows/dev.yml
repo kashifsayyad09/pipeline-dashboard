@@ -31,42 +31,51 @@ jobs:
             --instance-ids "i-004e985e0bab8c1bf" \
             --document-name "AWS-RunShellScript" \
             --comment "Deploy Streamlit Dashboard" \
-            --parameters commands='[
-              "set -e",
-              "sudo dnf install -y git python3 python3-pip",
+            --parameters '{
+              "commands":[
+                "set -e",
 
-              "mkdir -p /home/ec2-user",
+                "sudo dnf install -y git python3 python3-pip",
 
-              "if [ ! -d /home/ec2-user/dashboard ]; then git clone https://'${{ secrets.GITHUB_TOKEN_APP }}'@github.com/kashifsayyad09/pipeline-dashboard.git /home/ec2-user/dashboard; fi",
+                "mkdir -p /home/ec2-user",
 
-              "cd /home/ec2-user/dashboard",
+                "if [ ! -d /home/ec2-user/dashboard/.git ]; then git clone https://'${{ secrets.GITHUB_TOKEN_APP }}'@github.com/kashifsayyad09/pipeline-dashboard.git /home/ec2-user/dashboard; fi",
 
-              "git fetch origin",
+                "cd /home/ec2-user/dashboard",
 
-              "git reset --hard origin/main",
-              
-              "mv .env.example .env",
+                "git pull origin main",
 
-              "echo GITHUB_TOKEN='${{ secrets.GITHUB_TOKEN_APP }}' > .env",
+                "echo GITHUB_TOKEN='${{ secrets.GITHUB_TOKEN_APP }}' > .env",
 
-              "echo GITHUB_API_URL='${{ secrets.GITHUB_API_URL }}' >> .env",
+                "echo GITHUB_API_URL='${{ secrets.GITHUB_API_URL }}' >> .env",
 
-              "python3 -m pip install --upgrade pip",
+                "python3 -m pip install --upgrade pip",
 
-              "python3 -m pip install -r requirements.txt",
+                "python3 -m pip install -r requirements.txt",
 
-              "pkill -f streamlit || true",
+                "python3 -m pip install streamlit",
 
-              "nohup streamlit run app.py --server.address=0.0.0.0 --server.port=8501 > streamlit.log 2>&1 &",
+                "pkill -f streamlit || true",
 
-              "sleep 10",
+                "nohup streamlit run app.py --server.address=0.0.0.0 --server.port=8501 > streamlit.log 2>&1 &",
 
-              "ps -ef | grep streamlit"
-            ]' \
+                "sleep 10",
+
+                "echo ===== STREAMLIT LOG =====",
+
+                "cat streamlit.log",
+
+                "echo ===== PROCESS =====",
+
+                "pgrep -af streamlit"
+              ]
+            }' \
             --query "Command.CommandId" \
             --output text)
 
           echo "Command ID: $COMMAND_ID"
+
+          set +e
 
           aws ssm wait command-executed \
             --command-id "$COMMAND_ID" \
@@ -74,7 +83,8 @@ jobs:
 
           aws ssm get-command-invocation \
             --command-id "$COMMAND_ID" \
-            --instance-id "i-004e985e0bab8c1bf"
+            --instance-id "i-004e985e0bab8c1bf" \
+            --output json
 
           STATUS=$(aws ssm get-command-invocation \
             --command-id "$COMMAND_ID" \
@@ -85,9 +95,9 @@ jobs:
           echo "Deployment Status: $STATUS"
 
           if [ "$STATUS" != "Success" ]; then
-            echo "Deployment failed!"
+            echo "Deployment failed."
             exit 1
           fi
 
-      - name: Deployment Completed
-        run: echo "✅ Streamlit Dashboard deployed successfully!"
+      - name: Deployment Complete
+        run: echo "✅ Streamlit deployed successfully."
