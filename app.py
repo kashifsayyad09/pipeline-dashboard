@@ -347,27 +347,38 @@ def inject_css():
     }}
     .stButton > button:hover {{ opacity: 0.85; }}
 
-    /* Hide default streamlit chrome WITHOUT removing the sidebar toggle.
-       display:none on stHeader also kills the >> collapse/expand control,
-       which can strand users with no way to reopen a collapsed sidebar.
-       Instead we keep the header in the layout but make it visually
-       transparent, and explicitly force the toggle button to stay visible. */
+    /* Restyle (not hide) the Streamlit header chrome. The sidebar's
+       expand/collapse controls live INSIDE this header, so we keep it
+       in the layout, make it visually blend with the page, and force
+       both toggle buttons to stay visible and clickable no matter what
+       — this is the actual fix for "sidebar disappears with no way
+       back" once it auto-collapses. */
     header[data-testid="stHeader"] {{
-        background: transparent;
+        background: transparent !important;
         height: 3rem;
     }}
-    header[data-testid="stHeader"] > * {{
+    header[data-testid="stHeader"] * {{
         visibility: hidden;
     }}
-    /* Re-show only the sidebar collapse/expand control */
+    /* These two controls toggle the sidebar open/closed — force visible */
     button[data-testid="stSidebarCollapseButton"],
-    button[data-testid="collapsedControl"],
-    [data-testid="stSidebarCollapsedControl"] {{
+    button[data-testid="stSidebarCollapseButton"] *,
+    button[data-testid="stExpandSidebarButton"],
+    button[data-testid="stExpandSidebarButton"] * {{
         visibility: visible !important;
         opacity: 1 !important;
+        display: flex !important;
+        color: {COLORS['primary']} !important;
     }}
     #MainMenu {{ visibility: hidden; }}
     footer {{ visibility: hidden; }}
+
+    /* Make sure the sidebar itself can never render at 0 width/collapsed
+       on initial paint — guards against a stale collapsed state. */
+    section[data-testid="stSidebar"][aria-expanded="false"] {{
+        min-width: 21rem !important;
+        margin-left: 0 !important;
+    }}
 
     /* Scrollbar */
     ::-webkit-scrollbar {{ width: 6px; height: 6px; }}
@@ -1185,25 +1196,50 @@ def page_not_connected():
     """, unsafe_allow_html=True)
 
 def page_no_repo():
-    repo_count = len(st.session_state.get("repos", []))
-    hint = ""
-    if repo_count == 0:
-        hint = f"""
-        <div class="warn-box" style="max-width:420px;margin:1rem auto;text-align:left;">
-          ⚠️ No repositories are loaded yet. If the sidebar isn't visible,
-          click the <strong>&raquo;</strong> arrow in the top-left corner to expand it.
-        </div>
-        """
+    client = get_client()
+    repos = st.session_state.get("repos", [])
+
     st.markdown(f"""
-    <div class="empty-state" style="margin-top:3rem;">
+    <div class="empty-state" style="margin-top:2rem;">
       <div class="icon">📁</div>
       <h4>Select a Repository</h4>
       <p style="color:{COLORS['muted']};">
-        Choose a repository from the sidebar to view its GitHub Actions analytics.
+        Choose a repository below, or use the sidebar.
       </p>
-      {hint}
     </div>
     """, unsafe_allow_html=True)
+
+    # Inline fallback selector — works even if the sidebar is collapsed,
+    # hidden by an iframe/proxy, or its toggle is unreachable for any
+    # reason. This is the primary safety net, not just a hint.
+    if client and not repos:
+        with st.spinner("Loading repositories…"):
+            fetched = client.get_repos(st.session_state.get("selected_org"))
+            st.session_state.repos = sorted(
+                fetched, key=lambda r: r.get("updated_at", ""), reverse=True
+            )
+            repos = st.session_state.repos
+
+    if repos:
+        repo_names = [r["full_name"] for r in repos]
+        c1, c2 = st.columns([3, 1])
+        with c1:
+            choice = st.selectbox(
+                "Repository", ["— select —"] + repo_names,
+                key="inline_repo_sel", label_visibility="collapsed",
+            )
+        with c2:
+            go = st.button("Open →", use_container_width=True)
+        if go and choice != "— select —":
+            st.session_state.selected_repo = choice
+            st.rerun()
+    else:
+        st.markdown(
+            '<div class="warn-box" style="max-width:420px;margin:1rem auto;text-align:left;">'
+            '⚠️ No repositories found for this account/organization. '
+            'Check that your token has <code>repo</code> scope.</div>',
+            unsafe_allow_html=True,
+        )
 
 def page_dashboard(client: GitHubClient, owner: str, repo: str):
     token = st.session_state.token
