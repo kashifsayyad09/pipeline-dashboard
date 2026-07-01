@@ -2,6 +2,11 @@
 GitHub Actions Analytics Dashboard
 Enterprise-grade CI/CD observability platform
 Built with Python + Streamlit + Plotly + GitHub REST & GraphQL APIs
+
+Design system: Porcelain & Cobalt
+  Background  #EDF1F5  -- porcelain, soft and neutral
+  Primary     #0145F2  -- electric cobalt, the "signal" color
+  Ink         #0B1B3A  -- near-black navy for headings/text
 """
 
 import streamlit as st
@@ -18,349 +23,529 @@ from typing import Optional
 from dotenv import load_dotenv
 import io
 
-# ──────────────────────────────────────────────────────────────────────────────
+# --------------------------------------------------------------------------------
 # CONFIG & CONSTANTS
-# ──────────────────────────────────────────────────────────────────────────────
+# --------------------------------------------------------------------------------
 load_dotenv()
 
 PAGE_TITLE = "GitHub Actions Analytics"
 GITHUB_API = "https://api.github.com"
 GITHUB_GRAPHQL = "https://api.github.com/graphql"
 
+# -- Porcelain & Cobalt palette ----------------------------------------------
 COLORS = {
-    "primary":    "#81CAD6",
-    "secondary":  "#8A2BE2",
-    "bg":         "#011A27",
-    "card":       "#0B2435",
-    "card2":      "#12344D",
-    "text":       "#DFF6FF",
+    "primary":    "#0145F2",   # electric cobalt -- the signal color
+    "primary_dk": "#0033B8",   # pressed/hover state of primary
+    "secondary":  "#7C3AED",   # violet accent, used sparingly for contrast
+    "bg":         "#EDF1F5",   # porcelain background
+    "bg_alt":     "#E2E8F1",   # slightly deeper porcelain for stripes/wells
+    "card":       "#FFFFFF",   # card surface -- pure white pops off porcelain
+    "card2":      "#F7F9FC",   # secondary card surface (nested panels)
+    "border":     "#D7DEE9",   # hairline border
+    "text":       "#0B1B3A",   # ink -- primary text
     "white":      "#FFFFFF",
-    "success":    "#4ADE80",
-    "warning":    "#FACC15",
-    "danger":     "#EF4444",
-    "muted":      "#6B7280",
-}
-
-PLOTLY_TEMPLATE = {
-    "layout": {
-        "paper_bgcolor": "rgba(0,0,0,0)",
-        "plot_bgcolor": "rgba(0,0,0,0)",
-        "font": {"color": COLORS["text"], "family": "Inter, sans-serif"},
-        "xaxis": {"gridcolor": "#12344D", "zerolinecolor": "#12344D"},
-        "yaxis": {"gridcolor": "#12344D", "zerolinecolor": "#12344D"},
-    }
+    "success":    "#0B9A6B",
+    "warning":    "#B5790A",
+    "danger":     "#D6304B",
+    "muted":      "#5B6B85",   # slate -- secondary text
 }
 
 PAGES = [
-    ("🏠", "Dashboard"),
-    ("📁", "Repositories"),
-    ("⚙️", "Workflows"),
-    ("🚀", "Workflow Runs"),
-    ("📋", "Jobs"),
-    ("📊", "Analytics"),
-    ("📈", "Performance"),
-    ("🖥️", "Self-Hosted Runners"),
-    ("☁️", "GitHub Runners"),
-    ("📦", "Artifacts"),
-    ("📂", "Cache"),
-    ("🔐", "Security"),
-    ("📄", "Reports"),
-    ("📡", "API Monitor"),
-    ("⚙️ ", "Settings"),
+    ("home", "Dashboard"),
+    ("folder", "Repositories"),
+    ("workflow", "Workflows"),
+    ("runs", "Workflow Runs"),
+    ("jobs", "Jobs"),
+    ("analytics", "Analytics"),
+    ("perf", "Performance"),
+    ("server", "Self-Hosted Runners"),
+    ("cloud", "GitHub Runners"),
+    ("artifact", "Artifacts"),
+    ("cache", "Cache"),
+    ("security", "Security"),
+    ("reports", "Reports"),
+    ("api", "API Monitor"),
+    ("settings", "Settings"),
 ]
 
-# ──────────────────────────────────────────────────────────────────────────────
+# Minimal inline SVG icon set -- flat, geometric, matches the type-led system
+# instead of relying on emoji (which renders inconsistently across OSes and
+# fights the chosen palette).
+ICONS = {
+    "home": '<svg viewBox="0 0 24 24" fill="none"><path d="M4 11.5 12 4l8 7.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 10v9a1 1 0 0 0 1 1h3v-6h4v6h3a1 1 0 0 0 1-1v-9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    "folder": '<svg viewBox="0 0 24 24" fill="none"><path d="M3 7a1 1 0 0 1 1-1h5l2 2h9a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>',
+    "workflow": '<svg viewBox="0 0 24 24" fill="none"><circle cx="6" cy="6" r="2.3" stroke="currentColor" stroke-width="1.8"/><circle cx="18" cy="6" r="2.3" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="18" r="2.3" stroke="currentColor" stroke-width="1.8"/><path d="M8 7.2 12 16M16 7.2 12 16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
+    "runs": '<svg viewBox="0 0 24 24" fill="none"><path d="M6 4v16l14-8L6 4Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>',
+    "jobs": '<svg viewBox="0 0 24 24" fill="none"><rect x="4" y="6" width="16" height="14" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M8 6V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v1M4 11h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
+    "analytics": '<svg viewBox="0 0 24 24" fill="none"><path d="M5 19V9M12 19V5M19 19v-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
+    "perf": '<svg viewBox="0 0 24 24" fill="none"><path d="M4 19h16M4 19 9 13l3 3 6-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    "server": '<svg viewBox="0 0 24 24" fill="none"><rect x="4" y="4" width="16" height="6" rx="1.5" stroke="currentColor" stroke-width="1.8"/><rect x="4" y="14" width="16" height="6" rx="1.5" stroke="currentColor" stroke-width="1.8"/><circle cx="7.5" cy="7" r="0.9" fill="currentColor"/><circle cx="7.5" cy="17" r="0.9" fill="currentColor"/></svg>',
+    "cloud": '<svg viewBox="0 0 24 24" fill="none"><path d="M7 18a4 4 0 1 1 .5-7.97A5.5 5.5 0 0 1 18 12.5 3.5 3.5 0 0 1 17.5 18H7Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>',
+    "artifact": '<svg viewBox="0 0 24 24" fill="none"><path d="M3.5 7.5 12 3l8.5 4.5L12 12 3.5 7.5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M3.5 7.5V16l8.5 4.5L20.5 16V7.5M12 12v8.5" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>',
+    "cache": '<svg viewBox="0 0 24 24" fill="none"><ellipse cx="12" cy="6" rx="8" ry="3" stroke="currentColor" stroke-width="1.8"/><path d="M4 6v6c0 1.66 3.58 3 8 3s8-1.34 8-3V6M4 12v6c0 1.66 3.58 3 8 3s8-1.34 8-3v-6" stroke="currentColor" stroke-width="1.8"/></svg>',
+    "security": '<svg viewBox="0 0 24 24" fill="none"><path d="M12 3 4.5 6v6c0 4.5 3 7.5 7.5 9 4.5-1.5 7.5-4.5 7.5-9V6L12 3Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>',
+    "reports": '<svg viewBox="0 0 24 24" fill="none"><path d="M6 3h9l3 3v15a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 12h6M9 16h6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
+    "api": '<svg viewBox="0 0 24 24" fill="none"><path d="M12 3v4M12 17v4M3 12h4M17 12h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="1.8"/></svg>',
+    "settings": '<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/><path d="M19.4 13.5a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.04 1.56V20a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.56 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.56-1.04H4a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.56-1.1 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34H10a1.7 1.7 0 0 0 1.04-1.56V4a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1.04 1.56 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87V10a1.7 1.7 0 0 0 1.56 1.04H20a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1.04Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>',
+}
+
+# --------------------------------------------------------------------------------
 # PAGE CONFIG
-# ──────────────────────────────────────────────────────────────────────────────
+# --------------------------------------------------------------------------------
 st.set_page_config(
     page_title=PAGE_TITLE,
-    page_icon="⚡",
+    page_icon="\u26a1",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-# ──────────────────────────────────────────────────────────────────────────────
-# CSS
-# ──────────────────────────────────────────────────────────────────────────────
+# --------------------------------------------------------------------------------
+# CSS -- design system, layout fixes, full animation language
+# --------------------------------------------------------------------------------
 def inject_css():
     st.markdown(f"""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap');
 
     :root {{
-        --primary:   {COLORS['primary']};
-        --secondary: {COLORS['secondary']};
-        --bg:        {COLORS['bg']};
-        --card:      {COLORS['card']};
-        --card2:     {COLORS['card2']};
-        --text:      {COLORS['text']};
-        --success:   {COLORS['success']};
-        --warning:   {COLORS['warning']};
-        --danger:    {COLORS['danger']};
-        --muted:     {COLORS['muted']};
+        --primary:    {COLORS['primary']};
+        --primary-dk: {COLORS['primary_dk']};
+        --secondary:  {COLORS['secondary']};
+        --bg:         {COLORS['bg']};
+        --bg-alt:     {COLORS['bg_alt']};
+        --card:       {COLORS['card']};
+        --card2:      {COLORS['card2']};
+        --border:     {COLORS['border']};
+        --text:       {COLORS['text']};
+        --success:    {COLORS['success']};
+        --warning:    {COLORS['warning']};
+        --danger:     {COLORS['danger']};
+        --muted:      {COLORS['muted']};
     }}
 
     html, body, [class*="css"] {{
-        font-family: 'Inter', 'SF Pro Display', 'Segoe UI', sans-serif;
+        font-family: 'Inter', -apple-system, 'Segoe UI', sans-serif;
         background-color: var(--bg);
         color: var(--text);
     }}
 
-    /* ── Sidebar ── */
+    h1, h2, h3, h4, .navbar-brand, .kpi-value, .section-header h3 {{
+        font-family: 'Space Grotesk', 'Inter', sans-serif !important;
+    }}
+
+    @keyframes fadeSlideUp {{
+        from {{ opacity: 0; transform: translateY(14px); }}
+        to   {{ opacity: 1; transform: translateY(0); }}
+    }}
+    @keyframes pulseDot {{
+        0%   {{ box-shadow: 0 0 0 0 rgba(11,154,107,0.55); }}
+        70%  {{ box-shadow: 0 0 0 7px rgba(11,154,107,0); }}
+        100% {{ box-shadow: 0 0 0 0 rgba(11,154,107,0); }}
+    }}
+    @keyframes pulseDotBlue {{
+        0%   {{ box-shadow: 0 0 0 0 rgba(1,69,242,0.45); }}
+        70%  {{ box-shadow: 0 0 0 8px rgba(1,69,242,0); }}
+        100% {{ box-shadow: 0 0 0 0 rgba(1,69,242,0); }}
+    }}
+    @keyframes shimmer {{
+        0%   {{ background-position: -200% 0; }}
+        100% {{ background-position: 200% 0; }}
+    }}
+    @keyframes growBar {{
+        from {{ width: 0%; }}
+    }}
+    @keyframes railFlow {{
+        0%   {{ background-position: 0% 0%; }}
+        100% {{ background-position: 0% 200%; }}
+    }}
+    @keyframes spin {{
+        to {{ transform: rotate(360deg); }}
+    }}
+
+    @media (prefers-reduced-motion: reduce) {{
+        *, *::before, *::after {{
+            animation-duration: 0.001ms !important;
+            animation-iteration-count: 1 !important;
+            transition-duration: 0.001ms !important;
+        }}
+    }}
+
+    .main .block-container {{
+        padding: 1.25rem 2.25rem 3rem;
+        max-width: 100%;
+        background-color: var(--bg);
+    }}
+
+    div[data-testid="stHorizontalBlock"] {{
+        align-items: center !important;
+    }}
+    div[data-testid="column"] {{
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+    }}
+
     section[data-testid="stSidebar"] {{
-        background: linear-gradient(180deg, #011A27 0%, #0B2435 100%);
-        border-right: 1px solid #12344D;
+        background: var(--card);
+        border-right: 1px solid var(--border);
     }}
     section[data-testid="stSidebar"] * {{
         color: var(--text) !important;
         font-family: 'Inter', sans-serif !important;
     }}
-
-    /* ── Main area ── */
-    .main .block-container {{
-        padding: 1rem 2rem;
-        max-width: 100%;
-        background-color: var(--bg);
+    section[data-testid="stSidebar"] [data-testid="stVerticalBlock"] {{
+        gap: 0.35rem;
     }}
 
-    /* ── Navbar ── */
+    .sidebar-logo {{
+        display: flex; align-items: center; gap: 0.6rem;
+        padding: 1.1rem 0 0.9rem;
+    }}
+    .sidebar-logo-mark {{
+        width: 34px; height: 34px; border-radius: 9px;
+        background: linear-gradient(135deg, var(--primary), var(--secondary));
+        display: flex; align-items: center; justify-content: center;
+        box-shadow: 0 4px 14px rgba(1,69,242,0.28);
+        flex-shrink: 0;
+    }}
+    .sidebar-logo-mark svg {{ width: 18px; height: 18px; stroke: white; }}
+    .sidebar-logo-text {{
+        font-family: 'Space Grotesk', sans-serif;
+        font-size: 1.05rem; font-weight: 700; color: var(--text);
+        line-height: 1.15;
+    }}
+    .sidebar-logo-sub {{
+        font-size: .68rem; color: var(--muted); margin-top: 1px;
+        letter-spacing: .02em;
+    }}
+
+    .nav-rail {{
+        position: relative;
+        padding-left: 14px;
+        margin: .4rem 0 .6rem;
+    }}
+    .nav-rail::before {{
+        content: '';
+        position: absolute; left: 4px; top: 2px; bottom: 2px;
+        width: 2px; border-radius: 2px;
+        background: linear-gradient(180deg,
+            var(--primary) 0%, var(--secondary) 50%, var(--primary) 100%);
+        background-size: 100% 200%;
+        animation: railFlow 4s linear infinite;
+        opacity: .55;
+    }}
+
+    .nav-eyebrow {{
+        font-size: .64rem; color: var(--muted);
+        text-transform: uppercase; letter-spacing: .12em;
+        font-weight: 700; margin: 1rem 0 .5rem 2px;
+    }}
+
+    section[data-testid="stSidebar"] .stButton > button {{
+        background: transparent;
+        color: var(--text) !important;
+        border: 1px solid transparent;
+        border-radius: 9px;
+        font-weight: 500;
+        font-size: .86rem;
+        text-align: left;
+        justify-content: flex-start;
+        padding: .5rem .7rem;
+        transition: background .15s ease, border-color .15s ease, transform .12s ease;
+        box-shadow: none;
+    }}
+    section[data-testid="stSidebar"] .stButton > button:hover {{
+        background: var(--bg-alt);
+        transform: translateX(2px);
+    }}
+    section[data-testid="stSidebar"] .stButton > button:active {{
+        transform: translateX(2px) scale(0.99);
+    }}
+
+    .nav-active button {{
+        background: linear-gradient(90deg, rgba(1,69,242,0.10), rgba(1,69,242,0.02)) !important;
+        border-color: rgba(1,69,242,0.25) !important;
+        color: var(--primary) !important;
+        font-weight: 700 !important;
+    }}
+
     .navbar {{
-        background: linear-gradient(90deg, #011A27 0%, #0B2435 100%);
-        border-bottom: 1px solid #12344D;
-        padding: 0.75rem 1.5rem;
-        border-radius: 12px;
+        background: var(--card);
+        border: 1px solid var(--border);
+        padding: 0.85rem 1.5rem;
+        border-radius: 14px;
         margin-bottom: 1.5rem;
         display: flex;
         align-items: center;
         justify-content: space-between;
         flex-wrap: wrap;
-        gap: 0.5rem;
-    }}
-    .navbar-brand {{
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        font-size: 1.1rem;
-        font-weight: 700;
-        color: var(--primary) !important;
-    }}
-    .navbar-right {{
-        display: flex;
-        align-items: center;
-        gap: 1rem;
-        flex-wrap: wrap;
-    }}
-
-    /* ── KPI Cards ── */
-    .kpi-card {{
-        background: linear-gradient(135deg, #0B2435 0%, #12344D 100%);
-        border: 1px solid rgba(129,202,214,0.15);
-        border-radius: 16px;
-        padding: 1.25rem 1.5rem;
+        gap: 0.6rem;
         position: relative;
         overflow: hidden;
-        transition: transform 0.2s, box-shadow 0.2s;
+        box-shadow: 0 1px 2px rgba(11,27,58,0.04);
+        animation: fadeSlideUp .45s ease both;
+    }}
+    .navbar::after {{
+        content: '';
+        position: absolute; top: 0; left: 0; right: 0; height: 2px;
+        background: linear-gradient(90deg,
+            transparent, var(--primary), var(--secondary), var(--primary), transparent);
+        background-size: 200% 100%;
+        animation: shimmer 5s linear infinite;
+    }}
+    .navbar-brand {{
+        display: flex; align-items: center; gap: 0.55rem;
+        font-size: 1.08rem; font-weight: 700; color: var(--text) !important;
+    }}
+    .navbar-brand svg {{ width: 22px; height: 22px; }}
+    .navbar-right {{
+        display: flex; align-items: center; gap: 1.1rem; flex-wrap: wrap;
+    }}
+    .navbar-stat {{
+        font-size: .76rem; font-weight: 600;
+        display: flex; align-items: center; gap: .35rem;
+    }}
+
+    .kpi-card {{
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 1.15rem 1.3rem;
+        position: relative;
+        overflow: hidden;
+        transition: transform .2s cubic-bezier(.2,.8,.2,1), box-shadow .2s ease, border-color .2s ease;
+        animation: fadeSlideUp .5s cubic-bezier(.2,.8,.2,1) both;
     }}
     .kpi-card:hover {{
-        transform: translateY(-2px);
-        box-shadow: 0 8px 32px rgba(129,202,214,0.15);
-        border-color: rgba(129,202,214,0.35);
+        transform: translateY(-3px);
+        box-shadow: 0 14px 28px -10px rgba(1,69,242,0.18);
+        border-color: rgba(1,69,242,0.35);
     }}
     .kpi-card::before {{
         content: '';
-        position: absolute;
-        top: 0; left: 0; right: 0;
-        height: 3px;
+        position: absolute; top: 0; left: 0; right: 0; height: 3px;
         background: linear-gradient(90deg, var(--primary), var(--secondary));
-        border-radius: 16px 16px 0 0;
+        opacity: 0; transition: opacity .2s ease;
     }}
-    .kpi-icon {{
-        font-size: 1.6rem;
-        margin-bottom: 0.5rem;
+    .kpi-card:hover::before {{ opacity: 1; }}
+    .kpi-icon-wrap {{
+        width: 34px; height: 34px; border-radius: 9px;
+        background: rgba(1,69,242,0.08);
+        display: flex; align-items: center; justify-content: center;
+        margin-bottom: .6rem;
     }}
+    .kpi-icon-wrap svg {{ width: 17px; height: 17px; stroke: var(--primary); }}
     .kpi-value {{
-        font-size: 2rem;
-        font-weight: 700;
-        color: var(--primary);
-        line-height: 1;
+        font-size: 1.85rem; font-weight: 700; color: var(--text);
+        line-height: 1.05; letter-spacing: -.01em;
     }}
     .kpi-label {{
-        font-size: 0.75rem;
-        color: var(--muted);
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        margin-top: 0.25rem;
+        font-size: .73rem; color: var(--muted); font-weight: 600;
+        text-transform: uppercase; letter-spacing: .07em; margin-top: .3rem;
     }}
     .kpi-delta {{
-        font-size: 0.75rem;
-        margin-top: 0.5rem;
+        font-size: .73rem; font-weight: 600; margin-top: .55rem;
+        display: inline-flex; align-items: center; gap: .25rem;
+        padding: .15rem .5rem; border-radius: 999px;
     }}
-    .kpi-delta.up   {{ color: var(--success); }}
-    .kpi-delta.down {{ color: var(--danger);  }}
+    .kpi-delta.up   {{ color: var(--success); background: rgba(11,154,107,0.10); }}
+    .kpi-delta.down {{ color: var(--danger);  background: rgba(214,48,75,0.10); }}
 
-    /* ── Section headers ── */
     .section-header {{
-        display: flex;
-        align-items: center;
-        gap: 0.6rem;
-        margin: 1.5rem 0 1rem;
-        padding-bottom: 0.5rem;
-        border-bottom: 1px solid #12344D;
+        display: flex; align-items: center; gap: .6rem;
+        margin: 1.75rem 0 1.1rem;
+        animation: fadeSlideUp .4s ease both;
     }}
+    .section-header .icn {{
+        width: 26px; height: 26px; border-radius: 7px;
+        background: rgba(1,69,242,0.08);
+        display: flex; align-items: center; justify-content: center;
+    }}
+    .section-header .icn svg {{ width: 14px; height: 14px; stroke: var(--primary); }}
     .section-header h3 {{
-        margin: 0;
-        font-size: 1rem;
-        font-weight: 600;
-        color: var(--primary);
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
+        margin: 0; font-size: 1rem; font-weight: 700; color: var(--text);
+        letter-spacing: -.005em;
+    }}
+    .section-header .rule {{
+        flex: 1; height: 1px; background: var(--border);
     }}
 
-    /* ── Status pills ── */
     .pill {{
-        display: inline-block;
-        padding: 2px 10px;
-        border-radius: 999px;
-        font-size: 0.72rem;
-        font-weight: 600;
-        letter-spacing: 0.03em;
-    }}
-    .pill-success  {{ background: rgba(74,222,128,0.15); color: #4ADE80; border: 1px solid rgba(74,222,128,0.3);  }}
-    .pill-failure  {{ background: rgba(239,68,68,0.15);  color: #EF4444; border: 1px solid rgba(239,68,68,0.3);  }}
-    .pill-running  {{ background: rgba(129,202,214,0.15);color: #81CAD6; border: 1px solid rgba(129,202,214,0.3);}}
-    .pill-queued   {{ background: rgba(250,204,21,0.15); color: #FACC15; border: 1px solid rgba(250,204,21,0.3); }}
-    .pill-skipped  {{ background: rgba(107,114,128,0.15);color: #6B7280; border: 1px solid rgba(107,114,128,0.3);}}
-    .pill-canceled {{ background: rgba(107,114,128,0.15);color: #6B7280; border: 1px solid rgba(107,114,128,0.3);}}
-
-    /* ── Data table ── */
-    .modern-table {{
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 0.82rem;
-    }}
-    .modern-table th {{
-        background: #0B2435;
-        color: var(--muted);
-        text-transform: uppercase;
-        font-size: 0.7rem;
-        letter-spacing: 0.08em;
-        padding: 0.6rem 0.8rem;
-        border-bottom: 1px solid #12344D;
-        text-align: left;
+        display: inline-flex; align-items: center; gap: .3rem;
+        padding: 3px 11px; border-radius: 999px;
+        font-size: .71rem; font-weight: 700; letter-spacing: .02em;
         white-space: nowrap;
     }}
+    .pill::before {{
+        content: ''; width: 6px; height: 6px; border-radius: 50%;
+        background: currentColor; flex-shrink: 0;
+    }}
+    .pill-success  {{ background: rgba(11,154,107,0.10);  color: var(--success); }}
+    .pill-failure  {{ background: rgba(214,48,75,0.10);   color: var(--danger);  }}
+    .pill-running  {{ background: rgba(1,69,242,0.10);    color: var(--primary); }}
+    .pill-running::before {{ animation: pulseDotBlue 1.6s infinite; }}
+    .pill-queued   {{ background: rgba(181,121,10,0.10);  color: var(--warning); }}
+    .pill-skipped  {{ background: rgba(91,107,133,0.10);  color: var(--muted);   }}
+    .pill-canceled {{ background: rgba(91,107,133,0.10);  color: var(--muted);   }}
+
+    .table-wrap {{
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        overflow: hidden;
+        animation: fadeSlideUp .45s ease both;
+    }}
+    .modern-table {{
+        width: 100%; border-collapse: collapse; font-size: .83rem;
+    }}
+    .modern-table th {{
+        background: var(--card2);
+        color: var(--muted);
+        text-transform: uppercase;
+        font-size: .68rem; font-weight: 700; letter-spacing: .07em;
+        padding: .7rem .9rem;
+        border-bottom: 1px solid var(--border);
+        text-align: left; white-space: nowrap;
+    }}
     .modern-table td {{
-        padding: 0.6rem 0.8rem;
-        border-bottom: 1px solid rgba(18,52,77,0.5);
+        padding: .65rem .9rem;
+        border-bottom: 1px solid var(--bg-alt);
         color: var(--text);
         vertical-align: middle;
     }}
-    .modern-table tr:hover td {{
-        background: rgba(129,202,214,0.04);
-    }}
+    .modern-table tr:last-child td {{ border-bottom: none; }}
+    .modern-table tr {{ transition: background .12s ease; }}
+    .modern-table tr:hover td {{ background: rgba(1,69,242,0.035); }}
+    .modern-table a {{ color: var(--primary); text-decoration: none; font-weight: 600; }}
+    .modern-table a:hover {{ text-decoration: underline; }}
 
-    /* ── Chart containers ── */
     .chart-card {{
-        background: linear-gradient(135deg, #0B2435 0%, #12344D 100%);
-        border: 1px solid rgba(129,202,214,0.12);
+        background: var(--card);
+        border: 1px solid var(--border);
         border-radius: 16px;
-        padding: 1.25rem;
+        padding: 1.2rem;
         margin-bottom: 1rem;
+        transition: box-shadow .2s ease, border-color .2s ease;
+        animation: fadeSlideUp .5s ease both;
     }}
-    .chart-title {{
-        font-size: 0.85rem;
-        font-weight: 600;
-        color: var(--primary);
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        margin-bottom: 0.75rem;
+    .chart-card:hover {{
+        box-shadow: 0 10px 24px -12px rgba(11,27,58,0.12);
+        border-color: rgba(1,69,242,0.18);
     }}
 
-    /* ── Alert / info box ── */
-    .info-box {{
-        background: rgba(129,202,214,0.08);
-        border: 1px solid rgba(129,202,214,0.2);
-        border-radius: 10px;
-        padding: 0.75rem 1rem;
-        font-size: 0.82rem;
-        color: var(--text);
-        margin: 0.5rem 0;
+    .bar-track {{
+        width: 100%; height: 7px; border-radius: 999px;
+        background: var(--bg-alt); overflow: hidden;
     }}
-    .warn-box {{
-        background: rgba(250,204,21,0.08);
-        border: 1px solid rgba(250,204,21,0.2);
-        border-radius: 10px;
-        padding: 0.75rem 1rem;
-        font-size: 0.82rem;
-        color: var(--text);
-        margin: 0.5rem 0;
-    }}
-    .error-box {{
-        background: rgba(239,68,68,0.08);
-        border: 1px solid rgba(239,68,68,0.2);
-        border-radius: 10px;
-        padding: 0.75rem 1rem;
-        font-size: 0.82rem;
-        color: var(--text);
-        margin: 0.5rem 0;
+    .bar-fill {{
+        height: 100%; border-radius: 999px;
+        background: linear-gradient(90deg, var(--primary), var(--secondary));
+        animation: growBar 1s cubic-bezier(.2,.8,.2,1) both;
     }}
 
-    /* ── Empty state ── */
+    .info-box, .warn-box, .error-box {{
+        border-radius: 11px; padding: .8rem 1.05rem;
+        font-size: .83rem; margin: .6rem 0;
+        animation: fadeSlideUp .4s ease both;
+        border: 1px solid;
+    }}
+    .info-box  {{ background: rgba(1,69,242,0.06);   border-color: rgba(1,69,242,0.18);  color: var(--text); }}
+    .warn-box  {{ background: rgba(181,121,10,0.07); border-color: rgba(181,121,10,0.2); color: var(--text); }}
+    .error-box {{ background: rgba(214,48,75,0.07);  border-color: rgba(214,48,75,0.2);  color: var(--text); }}
+
     .empty-state {{
-        text-align: center;
-        padding: 3rem 2rem;
-        color: var(--muted);
+        text-align: center; padding: 3.5rem 2rem; color: var(--muted);
+        animation: fadeSlideUp .5s ease both;
     }}
-    .empty-state .icon {{ font-size: 2.5rem; margin-bottom: 0.75rem; }}
-    .empty-state h4 {{ color: var(--text); margin-bottom: 0.4rem; }}
+    .empty-state .icon-wrap {{
+        width: 56px; height: 56px; border-radius: 14px;
+        background: rgba(1,69,242,0.07);
+        display: flex; align-items: center; justify-content: center;
+        margin: 0 auto 1rem;
+        animation: fadeSlideUp .6s cubic-bezier(.2,.8,.2,1) both;
+    }}
+    .empty-state .icon-wrap svg {{ width: 26px; height: 26px; stroke: var(--primary); }}
+    .empty-state h4 {{ color: var(--text); margin-bottom: .4rem; font-size: 1.1rem; }}
 
-    /* ── Avatar ── */
+    .live-dot {{
+        width: 8px; height: 8px; border-radius: 50%;
+        background: var(--success); display: inline-block;
+        animation: pulseDot 1.8s infinite;
+    }}
+
     .avatar {{
-        width: 28px; height: 28px;
-        border-radius: 50%;
-        border: 2px solid var(--primary);
+        width: 30px; height: 30px; border-radius: 50%;
+        border: 2px solid var(--card);
+        box-shadow: 0 0 0 1.5px var(--primary);
     }}
 
-    /* ── Misc overrides ── */
     div[data-testid="stMetric"] {{
-        background: linear-gradient(135deg, #0B2435, #12344D);
-        border: 1px solid rgba(129,202,214,0.12);
+        background: var(--card);
+        border: 1px solid var(--border);
         border-radius: 12px;
-        padding: 0.75rem 1rem;
+        padding: .8rem 1.05rem;
+        transition: box-shadow .2s ease;
     }}
-    div[data-testid="stMetricValue"] {{ color: var(--primary) !important; font-weight: 700; }}
-    div[data-testid="stMetricLabel"] {{ color: var(--muted) !important; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; }}
+    div[data-testid="stMetric"]:hover {{
+        box-shadow: 0 8px 18px -10px rgba(1,69,242,0.2);
+    }}
+    div[data-testid="stMetricValue"] {{ color: var(--text) !important; font-weight: 700; }}
+    div[data-testid="stMetricLabel"] {{
+        color: var(--muted) !important; font-size: .72rem;
+        text-transform: uppercase; letter-spacing: .06em;
+    }}
 
     .stSelectbox label, .stTextInput label, .stDateInput label {{
-        color: var(--muted) !important;
-        font-size: 0.72rem !important;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
+        color: var(--muted) !important; font-size: .72rem !important;
+        text-transform: uppercase; letter-spacing: .06em; font-weight: 600;
     }}
+    .stSelectbox > div > div, .stTextInput > div > div {{
+        background: var(--card) !important;
+        border-color: var(--border) !important;
+        border-radius: 9px !important;
+    }}
+
     .stButton > button {{
-        background: linear-gradient(135deg, var(--primary), #5ba8b5);
-        color: #011A27;
+        background: linear-gradient(135deg, var(--primary), var(--primary-dk));
+        color: #fff;
         font-weight: 600;
         border: none;
-        border-radius: 8px;
-        transition: opacity 0.15s;
+        border-radius: 9px;
+        transition: transform .15s ease, box-shadow .15s ease;
+        box-shadow: 0 2px 8px rgba(1,69,242,0.22);
     }}
-    .stButton > button:hover {{ opacity: 0.85; }}
+    .stButton > button:hover {{
+        transform: translateY(-1px);
+        box-shadow: 0 6px 16px rgba(1,69,242,0.3);
+    }}
+    .stButton > button:active {{ transform: translateY(0); }}
 
-    /* Restyle (not hide) the Streamlit header chrome. The sidebar's
-       expand/collapse controls live INSIDE this header, so we keep it
-       in the layout, make it visually blend with the page, and force
-       both toggle buttons to stay visible and clickable no matter what
-       — this is the actual fix for "sidebar disappears with no way
-       back" once it auto-collapses. */
+    .stExpander {{
+        background: var(--card) !important;
+        border: 1px solid var(--border) !important;
+        border-radius: 12px !important;
+        overflow: hidden;
+    }}
+
+    .stTabs [data-baseweb="tab-list"] {{ gap: .3rem; }}
+    .stTabs [data-baseweb="tab"] {{
+        border-radius: 8px 8px 0 0;
+        color: var(--muted);
+    }}
+
+    code {{
+        background: var(--bg-alt) !important;
+        color: var(--primary) !important;
+        border-radius: 5px;
+    }}
+
+    hr {{ border-color: var(--border) !important; }}
+
     header[data-testid="stHeader"] {{
         background: transparent !important;
         height: 3rem;
     }}
-    header[data-testid="stHeader"] * {{
-        visibility: hidden;
-    }}
-    /* These two controls toggle the sidebar open/closed — force visible */
+    header[data-testid="stHeader"] * {{ visibility: hidden; }}
     button[data-testid="stSidebarCollapseButton"],
     button[data-testid="stSidebarCollapseButton"] *,
     button[data-testid="stExpandSidebarButton"],
@@ -368,30 +553,28 @@ def inject_css():
         visibility: visible !important;
         opacity: 1 !important;
         display: flex !important;
-        color: {COLORS['primary']} !important;
+        color: var(--primary) !important;
     }}
     #MainMenu {{ visibility: hidden; }}
     footer {{ visibility: hidden; }}
 
-    /* Make sure the sidebar itself can never render at 0 width/collapsed
-       on initial paint — guards against a stale collapsed state. */
-    section[data-testid="stSidebar"][aria-expanded="false"] {{
-        min-width: 21rem !important;
-        margin-left: 0 !important;
-    }}
+    div[data-testid="column"]:nth-child(1) .kpi-card {{ animation-delay: .02s; }}
+    div[data-testid="column"]:nth-child(2) .kpi-card {{ animation-delay: .07s; }}
+    div[data-testid="column"]:nth-child(3) .kpi-card {{ animation-delay: .12s; }}
+    div[data-testid="column"]:nth-child(4) .kpi-card {{ animation-delay: .17s; }}
+    div[data-testid="column"]:nth-child(5) .kpi-card {{ animation-delay: .22s; }}
 
-    /* Scrollbar */
-    ::-webkit-scrollbar {{ width: 6px; height: 6px; }}
-    ::-webkit-scrollbar-track {{ background: #0B2435; }}
-    ::-webkit-scrollbar-thumb {{ background: #12344D; border-radius: 3px; }}
+    ::-webkit-scrollbar {{ width: 7px; height: 7px; }}
+    ::-webkit-scrollbar-track {{ background: var(--bg-alt); }}
+    ::-webkit-scrollbar-thumb {{ background: var(--border); border-radius: 4px; }}
     ::-webkit-scrollbar-thumb:hover {{ background: var(--primary); }}
     </style>
     """, unsafe_allow_html=True)
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# GITHUB API CLIENT
-# ──────────────────────────────────────────────────────────────────────────────
+# --------------------------------------------------------------------------------
+# GITHUB API CLIENT  (unchanged -- already production-solid)
+# --------------------------------------------------------------------------------
 class GitHubClient:
     """Wrapper around GitHub REST + GraphQL APIs with caching and rate-limit handling."""
 
@@ -407,24 +590,24 @@ class GitHubClient:
             "X-GitHub-Api-Version": "2022-11-28",
         }
 
-    def _get(self, path: str, params: dict = None) -> Optional[dict | list]:
+    def _get(self, path: str, params: dict = None):
         """GET request with error handling."""
         try:
             url = f"{self.base_url}{path}" if path.startswith("/") else path
             r = requests.get(url, headers=self._headers, params=params, timeout=15)
             if r.status_code == 401:
-                st.error("❌ Authentication failed. Check your GitHub token.")
+                st.error("Authentication failed. Check your GitHub token.")
                 return None
             if r.status_code == 403:
                 reset = r.headers.get("X-RateLimit-Reset", "unknown")
-                st.warning(f"⚠️ Rate limit hit. Resets at: {reset}")
+                st.warning(f"Rate limit hit. Resets at: {reset}")
                 return None
             if r.status_code == 404:
                 return None
             r.raise_for_status()
             return r.json()
         except requests.exceptions.Timeout:
-            st.error("⏱️ Request timed out.")
+            st.error("Request timed out.")
             return None
         except Exception as e:
             st.error(f"API error: {e}")
@@ -442,7 +625,6 @@ class GitHubClient:
             if not data:
                 break
             if isinstance(data, dict):
-                # workflows, runs, etc. wrap items
                 for key in ["workflows", "workflow_runs", "jobs", "artifacts",
                             "runners", "caches", "secrets", "variables"]:
                     if key in data:
@@ -551,9 +733,9 @@ class GitHubClient:
         return self._get_paginated(f"/repos/{owner}/{repo}/contributors")
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# SESSION STATE HELPERS
-# ──────────────────────────────────────────────────────────────────────────────
+# --------------------------------------------------------------------------------
+# SESSION STATE HELPERS  (unchanged)
+# --------------------------------------------------------------------------------
 def init_session():
     defaults = {
         "token": os.getenv("GITHUB_TOKEN", ""),
@@ -569,8 +751,6 @@ def init_session():
         "page": "Dashboard",
         "last_refresh": None,
         "search_query": "",
-        # Tracks whether we've already attempted auto-auth this session,
-        # so reruns don't re-trigger API calls on every interaction.
         "auto_auth_attempted": False,
     }
     for k, v in defaults.items():
@@ -578,7 +758,7 @@ def init_session():
             st.session_state[k] = v
 
 
-def get_client() -> Optional[GitHubClient]:
+def get_client():
     return st.session_state.get("client")
 
 
@@ -598,22 +778,11 @@ def clear_auth_session():
 def auto_authenticate():
     """
     Automatically authenticate using a token already present in
-    st.session_state.token (sourced from .env at startup) — without
-    requiring the user to click Connect.
-
-    Runs at most once per session: guarded by `auto_auth_attempted`
-    so Streamlit reruns (widget interactions, page nav, etc.) don't
-    re-fire authentication calls against the GitHub API every time.
-
-    If a client/user already exist in session_state (e.g. from a
-    prior manual Connect), this is a no-op.
+    st.session_state.token (sourced from .env at startup) -- without
+    requiring the user to click Connect. Runs at most once per session.
     """
-    # Already authenticated this session — nothing to do.
     if st.session_state.get("client") and st.session_state.get("user"):
         return
-
-    # Already tried once (and presumably failed, or there was no
-    # token) — don't retry on every rerun.
     if st.session_state.get("auto_auth_attempted"):
         return
 
@@ -621,7 +790,7 @@ def auto_authenticate():
 
     token = st.session_state.get("token", "")
     if not token:
-        return  # No token in .env → fall through to Connect page.
+        return
 
     base_url = st.session_state.get("base_url", GITHUB_API)
 
@@ -630,8 +799,6 @@ def auto_authenticate():
         user = client.get_user()
 
         if not user or not user.get("login"):
-            # Invalid/expired token — clear it so the Connect page shows
-            # cleanly instead of a half-authenticated state.
             clear_auth_session()
             return
 
@@ -642,14 +809,12 @@ def auto_authenticate():
         st.session_state.orgs = orgs or []
 
     except Exception:
-        # Network error, malformed token, etc. — fail safe to Connect page
-        # rather than crashing the app on startup.
         clear_auth_session()
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# CACHED DATA FETCHERS  (TTL = 5 minutes)
-# ──────────────────────────────────────────────────────────────────────────────
+# --------------------------------------------------------------------------------
+# CACHED DATA FETCHERS  (unchanged -- TTL = 5 minutes)
+# --------------------------------------------------------------------------------
 @st.cache_data(ttl=300, show_spinner=False)
 def cached_runs(token: str, owner: str, repo: str, branch: str = None) -> list:
     c = GitHubClient(token)
@@ -691,10 +856,10 @@ def cached_rate_limit(token: str) -> dict:
     return c.get_rate_limit()
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# UTILITY FUNCTIONS
-# ──────────────────────────────────────────────────────────────────────────────
-def parse_iso(s: str) -> Optional[datetime]:
+# --------------------------------------------------------------------------------
+# UTILITY FUNCTIONS  (unchanged)
+# --------------------------------------------------------------------------------
+def parse_iso(s: str):
     if not s:
         return None
     try:
@@ -702,9 +867,9 @@ def parse_iso(s: str) -> Optional[datetime]:
     except Exception:
         return None
 
-def duration_str(seconds: Optional[float]) -> str:
+def duration_str(seconds) -> str:
     if not seconds:
-        return "—"
+        return "\u2014"
     minutes, secs = divmod(int(seconds), 60)
     hours, mins = divmod(minutes, 60)
     if hours:
@@ -713,7 +878,7 @@ def duration_str(seconds: Optional[float]) -> str:
         return f"{mins}m {secs}s"
     return f"{secs}s"
 
-def run_duration_seconds(run: dict) -> Optional[float]:
+def run_duration_seconds(run: dict):
     started = parse_iso(run.get("run_started_at") or run.get("created_at"))
     completed = parse_iso(run.get("updated_at"))
     if started and completed and completed > started:
@@ -782,10 +947,10 @@ def runs_to_df(runs: list) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# PLOTLY CHART BUILDERS
-# ──────────────────────────────────────────────────────────────────────────────
-def make_plotly(fig) -> go.Figure:
+# --------------------------------------------------------------------------------
+# PLOTLY CHART BUILDERS  (re-themed for light Porcelain & Cobalt surface)
+# --------------------------------------------------------------------------------
+def make_plotly(fig):
     fig.update_layout(
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
@@ -793,11 +958,11 @@ def make_plotly(fig) -> go.Figure:
         margin=dict(l=20, r=20, t=35, b=20),
         legend=dict(bgcolor="rgba(0,0,0,0)"),
     )
-    fig.update_xaxes(gridcolor="#12344D", zerolinecolor="#12344D")
-    fig.update_yaxes(gridcolor="#12344D", zerolinecolor="#12344D")
+    fig.update_xaxes(gridcolor=COLORS["border"], zerolinecolor=COLORS["border"])
+    fig.update_yaxes(gridcolor=COLORS["border"], zerolinecolor=COLORS["border"])
     return fig
 
-def pie_status(runs: list) -> go.Figure:
+def pie_status(runs: list):
     if not runs:
         return go.Figure()
     counts = {}
@@ -815,21 +980,21 @@ def pie_status(runs: list) -> go.Figure:
     }
     labels = list(counts.keys())
     values = list(counts.values())
-    colors = [label_map.get(l, "#555") for l in labels]
+    colors = [label_map.get(l, "#888") for l in labels]
     fig = go.Figure(go.Pie(
         labels=labels, values=values,
-        hole=0.6,
-        marker=dict(colors=colors, line=dict(color=COLORS["bg"], width=2)),
+        hole=0.62,
+        marker=dict(colors=colors, line=dict(color=COLORS["card"], width=2)),
         textinfo="label+percent",
         textfont=dict(size=11),
     ))
     fig.update_layout(
-        title=dict(text="Run Status", font=dict(size=13, color=COLORS["primary"])),
+        title=dict(text="Run Status", font=dict(size=13, color=COLORS["text"])),
         showlegend=False,
     )
     return make_plotly(fig)
 
-def daily_runs_chart(df: pd.DataFrame) -> go.Figure:
+def daily_runs_chart(df: pd.DataFrame):
     if df.empty or "_started_dt" not in df.columns:
         return go.Figure()
     df2 = df.copy()
@@ -852,10 +1017,10 @@ def daily_runs_chart(df: pd.DataFrame) -> go.Figure:
                   barmode="stack",
                   labels={"date": "", "count": "Runs"})
     fig.update_layout(title=dict(text="Daily Workflow Runs",
-                                  font=dict(size=13, color=COLORS["primary"])))
+                                  font=dict(size=13, color=COLORS["text"])))
     return make_plotly(fig)
 
-def duration_trend(df: pd.DataFrame) -> go.Figure:
+def duration_trend(df: pd.DataFrame):
     if df.empty:
         return go.Figure()
     df2 = df[df["_duration_s"] > 0].copy()
@@ -868,20 +1033,20 @@ def duration_trend(df: pd.DataFrame) -> go.Figure:
     fig.add_trace(go.Scatter(
         x=df2["_started_dt"], y=df2["duration_min"],
         mode="lines+markers",
-        line=dict(color=COLORS["primary"], width=2),
+        line=dict(color=COLORS["primary"], width=2.5),
         marker=dict(size=5, color=COLORS["secondary"]),
         name="Duration (min)",
         fill="tozeroy",
-        fillcolor="rgba(129,202,214,0.08)",
+        fillcolor="rgba(1,69,242,0.07)",
     ))
     fig.update_layout(
         title=dict(text="Build Duration Trend (minutes)",
-                   font=dict(size=13, color=COLORS["primary"])),
+                   font=dict(size=13, color=COLORS["text"])),
         xaxis_title="", yaxis_title="Minutes",
     )
     return make_plotly(fig)
 
-def top_failed_workflows(df: pd.DataFrame) -> go.Figure:
+def top_failed_workflows(df: pd.DataFrame):
     if df.empty:
         return go.Figure()
     failed = df[df["Conclusion"] == "failure"]
@@ -893,13 +1058,13 @@ def top_failed_workflows(df: pd.DataFrame) -> go.Figure:
                   color_discrete_sequence=[COLORS["danger"]])
     fig.update_layout(
         title=dict(text="Top Failed Workflows",
-                   font=dict(size=13, color=COLORS["primary"])),
+                   font=dict(size=13, color=COLORS["text"])),
         yaxis=dict(autorange="reversed"),
         xaxis_title="", yaxis_title="",
     )
     return make_plotly(fig)
 
-def actor_leaderboard(df: pd.DataFrame) -> go.Figure:
+def actor_leaderboard(df: pd.DataFrame):
     if df.empty:
         return go.Figure()
     top = df["Actor"].value_counts().head(10).reset_index()
@@ -908,38 +1073,39 @@ def actor_leaderboard(df: pd.DataFrame) -> go.Figure:
                   color_discrete_sequence=[COLORS["secondary"]])
     fig.update_layout(
         title=dict(text="Top Workflow Triggers",
-                   font=dict(size=13, color=COLORS["primary"])),
+                   font=dict(size=13, color=COLORS["text"])),
         xaxis_title="", yaxis_title="",
     )
     return make_plotly(fig)
 
-def branch_chart(df: pd.DataFrame) -> go.Figure:
+def branch_chart(df: pd.DataFrame):
     if df.empty:
         return go.Figure()
     top = df["Branch"].value_counts().head(10).reset_index()
     top.columns = ["Branch", "Runs"]
     fig = px.pie(top, names="Branch", values="Runs", hole=0.4,
-                  color_discrete_sequence=px.colors.sequential.Teal)
+                  color_discrete_sequence=px.colors.sequential.Blues_r)
     fig.update_layout(
         title=dict(text="Runs by Branch",
-                   font=dict(size=13, color=COLORS["primary"])),
+                   font=dict(size=13, color=COLORS["text"])),
     )
     return make_plotly(fig)
 
-def success_rate_gauge(score: float) -> go.Figure:
+def success_rate_gauge(score: float):
     fig = go.Figure(go.Indicator(
         mode="gauge+number+delta",
         value=score,
-        number=dict(suffix="%", font=dict(color=COLORS["primary"], size=36)),
+        number=dict(suffix="%", font=dict(color=COLORS["text"], size=36)),
         delta=dict(reference=80, increasing=dict(color=COLORS["success"]),
                    decreasing=dict(color=COLORS["danger"])),
         gauge=dict(
             axis=dict(range=[0, 100], tickcolor=COLORS["muted"]),
             bar=dict(color=COLORS["primary"]),
+            bgcolor=COLORS["bg_alt"],
             steps=[
-                dict(range=[0, 50],  color="rgba(239,68,68,0.15)"),
-                dict(range=[50, 80], color="rgba(250,204,21,0.15)"),
-                dict(range=[80, 100],color="rgba(74,222,128,0.15)"),
+                dict(range=[0, 50],  color="rgba(214,48,75,0.12)"),
+                dict(range=[50, 80], color="rgba(181,121,10,0.12)"),
+                dict(range=[80, 100],color="rgba(11,154,107,0.12)"),
             ],
             threshold=dict(line=dict(color=COLORS["warning"], width=3), value=80),
         ),
@@ -948,7 +1114,7 @@ def success_rate_gauge(score: float) -> go.Figure:
     fig.update_layout(height=220)
     return make_plotly(fig)
 
-def runtime_dist(df: pd.DataFrame) -> go.Figure:
+def runtime_dist(df: pd.DataFrame):
     if df.empty:
         return go.Figure()
     df2 = df[df["_duration_s"] > 0].copy()
@@ -959,12 +1125,12 @@ def runtime_dist(df: pd.DataFrame) -> go.Figure:
                         color_discrete_sequence=[COLORS["primary"]])
     fig.update_layout(
         title=dict(text="Runtime Distribution",
-                   font=dict(size=13, color=COLORS["primary"])),
+                   font=dict(size=13, color=COLORS["text"])),
         xaxis_title="Duration (min)", yaxis_title="Count",
     )
     return make_plotly(fig)
 
-def runner_utilization(runners: list) -> go.Figure:
+def runner_utilization(runners: list):
     if not runners:
         return go.Figure()
     statuses = {"online": 0, "offline": 0}
@@ -977,33 +1143,37 @@ def runner_utilization(runners: list) -> go.Figure:
         marker_color=[COLORS["success"], COLORS["danger"]][:len(statuses)],
     ))
     fig.update_layout(
-        title=dict(text="Runner Status", font=dict(size=13, color=COLORS["primary"])),
+        title=dict(text="Runner Status", font=dict(size=13, color=COLORS["text"])),
         xaxis_title="", yaxis_title="Count",
     )
     return make_plotly(fig)
 
 
-# ──────────────────────────────────────────────────────────────────────────────
+# --------------------------------------------------------------------------------
 # UI COMPONENTS
-# ──────────────────────────────────────────────────────────────────────────────
-def kpi_card(icon: str, label: str, value, delta: str = None, delta_up: bool = True):
+# --------------------------------------------------------------------------------
+def icon(name: str) -> str:
+    return ICONS.get(name, "")
+
+def kpi_card(icon_name: str, label: str, value, delta: str = None, delta_up: bool = True):
     delta_html = ""
     if delta:
         cls = "up" if delta_up else "down"
-        arrow = "↑" if delta_up else "↓"
+        arrow = "&#8593;" if delta_up else "&#8595;"
         delta_html = f'<div class="kpi-delta {cls}">{arrow} {delta}</div>'
     return f"""
     <div class="kpi-card">
-      <div class="kpi-icon">{icon}</div>
+      <div class="kpi-icon-wrap">{icon(icon_name)}</div>
       <div class="kpi-value">{value}</div>
       <div class="kpi-label">{label}</div>
       {delta_html}
     </div>
     """
 
-def section_header(icon: str, title: str):
+def section_header(icon_name: str, title: str):
     st.markdown(
-        f'<div class="section-header"><span>{icon}</span><h3>{title}</h3></div>',
+        f'<div class="section-header"><div class="icn">{icon(icon_name)}</div>'
+        f'<h3>{title}</h3><div class="rule"></div></div>',
         unsafe_allow_html=True,
     )
 
@@ -1012,12 +1182,17 @@ def render_navbar(user: dict, rl: dict):
     limit = rl.get("limit", "?")
     avatar = user.get("avatar_url", "")
     login = user.get("login", "")
-    avatar_html = f'<img src="{avatar}" class="avatar" />' if avatar else "👤"
-    rl_color = COLORS["success"] if (remaining != "?" and remaining > 500) else COLORS["warning"]
+    avatar_html = f'<img src="{avatar}" class="avatar" />' if avatar else ""
+    try:
+        pct = remaining / limit if limit not in ("?", 0, None) else 1
+    except Exception:
+        pct = 1
+    rl_color = COLORS["success"] if pct > 0.3 else (COLORS["warning"] if pct > 0.1 else COLORS["danger"])
+
     st.markdown(f"""
     <div class="navbar">
       <div class="navbar-brand">
-        <svg height="22" viewBox="0 0 16 16" fill="{COLORS['primary']}" aria-hidden="true">
+        <svg viewBox="0 0 16 16" fill="{COLORS['primary']}" aria-hidden="true">
           <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38
           0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01
           1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95
@@ -1029,18 +1204,17 @@ def render_navbar(user: dict, rl: dict):
         GitHub Actions Analytics
       </div>
       <div class="navbar-right">
-        <span style="color:{rl_color};font-size:.75rem;font-weight:600;">
-          ⚡ {remaining}/{limit} API calls
+        <span class="navbar-stat" style="color:{rl_color};">
+          {icon('api')} {remaining}/{limit} API calls
         </span>
-        <span style="font-size:.75rem;color:{COLORS['muted']};">
-          🕐 {datetime.now().strftime('%H:%M:%S')}
+        <span class="navbar-stat" style="color:{COLORS['muted']};">
+          {datetime.now().strftime('%H:%M:%S')}
         </span>
         {avatar_html}
-        <span style="font-size:.78rem;font-weight:600;color:{COLORS['primary']};">
+        <span style="font-size:.82rem;font-weight:700;color:{COLORS['text']};">
           {login}
         </span>
-        <span style="width:8px;height:8px;border-radius:50%;background:{COLORS['success']};
-              display:inline-block;" title="Connected"></span>
+        <span class="live-dot" title="Connected"></span>
       </div>
     </div>
     """, unsafe_allow_html=True)
@@ -1050,41 +1224,44 @@ def render_sidebar():
     token = st.session_state.token
 
     with st.sidebar:
-        # Logo
         st.markdown(f"""
-        <div style="padding:1rem 0 0.5rem; text-align:center;">
-          <div style="font-size:1.3rem;font-weight:800;color:{COLORS['primary']};
-                      letter-spacing:.03em;">⚡ GH Analytics</div>
-          <div style="font-size:.7rem;color:{COLORS['muted']};margin-top:2px;">
-            Enterprise CI/CD Observability
+        <div class="sidebar-logo">
+          <div class="sidebar-logo-mark">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z"
+              stroke="white" stroke-width="1.8" stroke-linejoin="round"/></svg>
+          </div>
+          <div>
+            <div class="sidebar-logo-text">GH Analytics</div>
+            <div class="sidebar-logo-sub">CI/CD Observability</div>
           </div>
         </div>
-        <hr style="border-color:#12344D;margin:.75rem 0;" />
+        <hr style="margin:.2rem 0 .75rem;" />
         """, unsafe_allow_html=True)
 
         # Token input
         if not st.session_state.token:
-            st.markdown('<div style="font-size:.72rem;color:{};text-transform:uppercase;'
-                        'letter-spacing:.06em;margin-bottom:.3rem;">GitHub Token</div>'.format(
-                            COLORS["muted"]), unsafe_allow_html=True)
+            st.markdown(f'<div style="font-size:.72rem;color:{COLORS["muted"]};'
+                        'text-transform:uppercase;letter-spacing:.06em;'
+                        'font-weight:600;margin-bottom:.3rem;">GitHub Token</div>',
+                        unsafe_allow_html=True)
             tok = st.text_input("Token", type="password", label_visibility="collapsed",
                                  placeholder="ghp_... or github_pat_...",
                                  key="token_input")
             be = st.text_input("GitHub Enterprise URL (optional)", placeholder=GITHUB_API,
                                 key="be_input", label_visibility="visible")
-            if st.button("🔌 Connect", use_container_width=True):
+            if st.button("Connect", use_container_width=True):
                 if tok:
                     st.session_state.token = tok
                     st.session_state.base_url = be or GITHUB_API
                     st.session_state.client = GitHubClient(tok, st.session_state.base_url)
-                    with st.spinner("Authenticating…"):
+                    with st.spinner("Authenticating..."):
                         user = st.session_state.client.get_user()
                         if user and user.get("login"):
                             st.session_state.user = user
                             orgs = st.session_state.client.get_orgs()
                             st.session_state.orgs = orgs
-                            st.session_state.auto_auth_attempted = True  # already authenticated, skip auto-auth
-                            st.success(f"✅ Connected as **{user['login']}**")
+                            st.session_state.auto_auth_attempted = True
+                            st.success(f"Connected as {user['login']}")
                             st.rerun()
                         else:
                             st.error("Authentication failed.")
@@ -1097,10 +1274,10 @@ def render_sidebar():
             if user.get("avatar_url"):
                 col1, col2 = st.columns([1, 3])
                 with col1:
-                    st.image(user["avatar_url"], width=36)
+                    st.image(user["avatar_url"], width=38)
                 with col2:
                     st.markdown(f"""
-                    <div style="font-size:.82rem;font-weight:700;color:{COLORS['text']};">
+                    <div style="font-size:.84rem;font-weight:700;color:{COLORS['text']};">
                       {user.get('login','')}
                     </div>
                     <div style="font-size:.7rem;color:{COLORS['muted']};">
@@ -1108,35 +1285,28 @@ def render_sidebar():
                     </div>
                     """, unsafe_allow_html=True)
 
-            st.markdown('<hr style="border-color:#12344D;margin:.5rem 0;" />',
-                        unsafe_allow_html=True)
+            st.markdown('<hr style="margin:.6rem 0;" />', unsafe_allow_html=True)
 
-            # Org selector
             orgs = st.session_state.orgs
             org_names = [o["login"] for o in orgs]
             user_login = user.get("login", "")
             all_contexts = [user_login] + org_names
             selected_ctx = st.selectbox("Organization / User", all_contexts, key="ctx_sel")
-            if selected_ctx != user_login:
-                st.session_state.selected_org = selected_ctx
-            else:
-                st.session_state.selected_org = None
+            st.session_state.selected_org = None if selected_ctx == user_login else selected_ctx
 
-            # Repo selector
             if "repos" not in st.session_state or not st.session_state.repos:
-                with st.spinner("Loading repos…"):
+                with st.spinner("Loading repos..."):
                     repos = client.get_repos(st.session_state.selected_org)
                     st.session_state.repos = sorted(repos, key=lambda r: r.get("updated_at", ""), reverse=True)
             repos = st.session_state.repos
             repo_names = [r["full_name"] for r in repos]
             if repo_names:
-                sel_repo = st.selectbox("Repository", ["— select —"] + repo_names, key="repo_sel")
-                st.session_state.selected_repo = sel_repo if sel_repo != "— select —" else None
+                sel_repo = st.selectbox("Repository", ["\u2014 select \u2014"] + repo_names, key="repo_sel")
+                st.session_state.selected_repo = sel_repo if sel_repo != "\u2014 select \u2014" else None
             else:
                 st.info("No repositories found.")
                 st.session_state.selected_repo = None
 
-            # Branch selector
             if st.session_state.selected_repo:
                 owner, repo_name = st.session_state.selected_repo.split("/", 1)
                 branches = cached_branches(token, owner, repo_name)
@@ -1146,54 +1316,52 @@ def render_sidebar():
             else:
                 st.session_state.selected_branch = None
 
-            st.markdown('<hr style="border-color:#12344D;margin:.5rem 0;" />',
-                        unsafe_allow_html=True)
-
-            # Navigation
-            st.markdown(f'<div style="font-size:.65rem;color:{COLORS["muted"]};'
-                        'text-transform:uppercase;letter-spacing:.1em;'
-                        'margin-bottom:.4rem;">Navigation</div>', unsafe_allow_html=True)
-            for icon, name in PAGES:
+            st.markdown('<div class="nav-eyebrow">Navigation</div>', unsafe_allow_html=True)
+            st.markdown('<div class="nav-rail">', unsafe_allow_html=True)
+            for icon_name, name in PAGES:
                 active = st.session_state.page == name
-                bg = f"background:rgba(129,202,214,0.12);border-left:3px solid {COLORS['primary']};" if active else ""
-                if st.button(f"{icon} {name}", key=f"nav_{name}", use_container_width=True):
+                wrap_class = "nav-active" if active else ""
+                st.markdown(f'<div class="{wrap_class}">', unsafe_allow_html=True)
+                if st.button(name, key=f"nav_{name}", use_container_width=True):
                     st.session_state.page = name
                     st.rerun()
+                st.markdown('</div>', unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
 
-            st.markdown('<hr style="border-color:#12344D;margin:.5rem 0;" />',
-                        unsafe_allow_html=True)
+            st.markdown('<hr style="margin:.6rem 0;" />', unsafe_allow_html=True)
 
             col1, col2 = st.columns(2)
             with col1:
-                if st.button("🔄 Refresh", use_container_width=True):
+                if st.button("Refresh", use_container_width=True):
                     st.cache_data.clear()
                     st.session_state.last_refresh = datetime.now()
                     st.rerun()
             with col2:
-                if st.button("🚪 Logout", use_container_width=True):
+                if st.button("Logout", use_container_width=True):
                     clear_auth_session()
-                    st.session_state.auto_auth_attempted = True  # prevent .env token re-login this session
+                    st.session_state.auto_auth_attempted = True
                     st.rerun()
 
 
-# ──────────────────────────────────────────────────────────────────────────────
+# --------------------------------------------------------------------------------
 # PAGE RENDERERS
-# ──────────────────────────────────────────────────────────────────────────────
+# --------------------------------------------------------------------------------
 def page_not_connected():
     st.markdown(f"""
     <div class="empty-state" style="margin-top:4rem;">
-      <div class="icon">⚡</div>
-      <h4 style="color:{COLORS['primary']};font-size:1.4rem;">GitHub Actions Analytics</h4>
-      <p style="color:{COLORS['muted']};max-width:400px;margin:.5rem auto;">
+      <div class="icon-wrap">{icon('home')}</div>
+      <h4>GitHub Actions Analytics</h4>
+      <p style="color:{COLORS['muted']};max-width:420px;margin:.5rem auto;">
         Connect your GitHub Personal Access Token in the sidebar to start
         monitoring CI/CD pipelines across your repositories.
       </p>
       <div class="info-box" style="max-width:420px;margin:1rem auto;text-align:left;">
         <strong>Required token scopes:</strong><br/>
-        <code>repo</code> · <code>workflow</code> · <code>read:org</code> · <code>read:user</code>
+        <code>repo</code> &middot; <code>workflow</code> &middot; <code>read:org</code> &middot; <code>read:user</code>
       </div>
     </div>
     """, unsafe_allow_html=True)
+
 
 def page_no_repo():
     client = get_client()
@@ -1201,7 +1369,7 @@ def page_no_repo():
 
     st.markdown(f"""
     <div class="empty-state" style="margin-top:2rem;">
-      <div class="icon">📁</div>
+      <div class="icon-wrap">{icon('folder')}</div>
       <h4>Select a Repository</h4>
       <p style="color:{COLORS['muted']};">
         Choose a repository below, or use the sidebar.
@@ -1209,11 +1377,8 @@ def page_no_repo():
     </div>
     """, unsafe_allow_html=True)
 
-    # Inline fallback selector — works even if the sidebar is collapsed,
-    # hidden by an iframe/proxy, or its toggle is unreachable for any
-    # reason. This is the primary safety net, not just a hint.
     if client and not repos:
-        with st.spinner("Loading repositories…"):
+        with st.spinner("Loading repositories..."):
             fetched = client.get_repos(st.session_state.get("selected_org"))
             st.session_state.repos = sorted(
                 fetched, key=lambda r: r.get("updated_at", ""), reverse=True
@@ -1225,27 +1390,28 @@ def page_no_repo():
         c1, c2 = st.columns([3, 1])
         with c1:
             choice = st.selectbox(
-                "Repository", ["— select —"] + repo_names,
+                "Repository", ["\u2014 select \u2014"] + repo_names,
                 key="inline_repo_sel", label_visibility="collapsed",
             )
         with c2:
-            go = st.button("Open →", use_container_width=True)
-        if go and choice != "— select —":
+            go = st.button("Open \u2192", use_container_width=True)
+        if go and choice != "\u2014 select \u2014":
             st.session_state.selected_repo = choice
             st.rerun()
     else:
         st.markdown(
-            '<div class="warn-box" style="max-width:420px;margin:1rem auto;text-align:left;">'
-            '⚠️ No repositories found for this account/organization. '
-            'Check that your token has <code>repo</code> scope.</div>',
+            f'<div class="warn-box" style="max-width:420px;margin:1rem auto;text-align:left;">'
+            f'No repositories found for this account/organization. '
+            f'Check that your token has <code>repo</code> scope.</div>',
             unsafe_allow_html=True,
         )
 
-def page_dashboard(client: GitHubClient, owner: str, repo: str):
+
+def page_dashboard(client, owner: str, repo: str):
     token = st.session_state.token
     branch = st.session_state.selected_branch
 
-    with st.spinner("Loading dashboard data…"):
+    with st.spinner("Loading dashboard data..."):
         runs = cached_runs(token, owner, repo, branch)
         workflows = cached_workflows(token, owner, repo)
         artifacts = cached_artifacts(token, owner, repo)
@@ -1265,38 +1431,35 @@ def page_dashboard(client: GitHubClient, owner: str, repo: str):
     avg_dur = sum(durations) / len(durations) if durations else 0
     artifact_size = sum(a.get("size_in_bytes", 0) for a in artifacts)
     online_runners = sum(1 for r in runners if r.get("status") == "online")
-    offline_runners = len(runners) - online_runners
 
-    # ── KPIs ──
-    section_header("🏠", "Overview")
+    section_header("home", "Overview")
     cols = st.columns(5)
     kpis = [
-        ("🗂️", "Total Runs",     total,            None, True),
-        ("✅", "Successful",     successful,       f"{score}% rate", score >= 80),
-        ("❌", "Failed",         failed,           None, False),
-        ("⏳", "In Progress",    in_progress,      None, True),
-        ("🏎️", "Avg Duration",   duration_str(avg_dur), None, True),
+        ("runs",     "Total Runs",     total,            None, True),
+        ("workflow", "Successful",     successful,       f"{score}% rate", score >= 80),
+        ("security", "Failed",         failed,           None, False),
+        ("perf",     "In Progress",    in_progress,      None, True),
+        ("analytics","Avg Duration",   duration_str(avg_dur), None, True),
     ]
-    for i, (icon, label, val, delta, up) in enumerate(kpis):
+    for i, (icn, label, val, delta, up) in enumerate(kpis):
         with cols[i]:
-            st.markdown(kpi_card(icon, label, val, delta, up), unsafe_allow_html=True)
+            st.markdown(kpi_card(icn, label, val, delta, up), unsafe_allow_html=True)
 
-    st.markdown("<br/>", unsafe_allow_html=True)
+    st.markdown("<div style='height:1rem'></div>", unsafe_allow_html=True)
     cols2 = st.columns(5)
     kpis2 = [
-        ("🔄", "Queued",         queued,           None, True),
-        ("⏭️", "Skipped",        skipped,          None, True),
-        ("🚫", "Cancelled",      cancelled,        None, False),
-        ("📦", "Artifacts",      len(artifacts),   fmt_bytes(artifact_size), True),
-        ("🖥️", "Runners Online", f"{online_runners}/{len(runners)}", None, online_runners > 0),
+        ("jobs",     "Queued",         queued,           None, True),
+        ("reports",  "Skipped",        skipped,          None, True),
+        ("api",      "Cancelled",      cancelled,        None, False),
+        ("artifact", "Artifacts",      len(artifacts),   fmt_bytes(artifact_size), True),
+        ("server",   "Runners Online", f"{online_runners}/{len(runners)}", None, online_runners > 0),
     ]
-    for i, (icon, label, val, delta, up) in enumerate(kpis2):
+    for i, (icn, label, val, delta, up) in enumerate(kpis2):
         with cols2[i]:
-            st.markdown(kpi_card(icon, label, val, delta, up), unsafe_allow_html=True)
+            st.markdown(kpi_card(icn, label, val, delta, up), unsafe_allow_html=True)
 
-    st.markdown("<br/>", unsafe_allow_html=True)
+    st.markdown("<div style='height:1rem'></div>", unsafe_allow_html=True)
 
-    # ── Charts row 1 ──
     c1, c2, c3 = st.columns([2, 1, 1])
     with c1:
         st.markdown('<div class="chart-card">', unsafe_allow_html=True)
@@ -1311,7 +1474,6 @@ def page_dashboard(client: GitHubClient, owner: str, repo: str):
         st.plotly_chart(success_rate_gauge(score), use_container_width=True, config={"displayModeBar": False})
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # ── Charts row 2 ──
     c4, c5 = st.columns(2)
     with c4:
         st.markdown('<div class="chart-card">', unsafe_allow_html=True)
@@ -1322,7 +1484,6 @@ def page_dashboard(client: GitHubClient, owner: str, repo: str):
         st.plotly_chart(top_failed_workflows(df), use_container_width=True, config={"displayModeBar": False})
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # ── Charts row 3 ──
     c6, c7 = st.columns(2)
     with c6:
         st.markdown('<div class="chart-card">', unsafe_allow_html=True)
@@ -1333,14 +1494,13 @@ def page_dashboard(client: GitHubClient, owner: str, repo: str):
         st.plotly_chart(branch_chart(df), use_container_width=True, config={"displayModeBar": False})
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # ── Recent runs table ──
-    section_header("🚀", "Recent Workflow Runs")
+    section_header("runs", "Recent Workflow Runs")
     render_runs_table(df.head(20))
 
 
 def render_runs_table(df: pd.DataFrame):
     if df.empty:
-        st.markdown('<div class="empty-state"><div class="icon">🚀</div>'
+        st.markdown(f'<div class="empty-state"><div class="icon-wrap">{icon("runs")}</div>'
                     '<h4>No workflow runs found</h4>'
                     '<p>Trigger a workflow or adjust your filters.</p></div>',
                     unsafe_allow_html=True)
@@ -1351,22 +1511,21 @@ def render_runs_table(df: pd.DataFrame):
         pill = status_pill(row["Status"], row["Conclusion"])
         rows_html += f"""
         <tr>
-          <td><a href="{row.get('Run URL','#')}" target="_blank"
-                 style="color:{COLORS['primary']};text-decoration:none;">
-            #{row['Run ID']}</a></td>
+          <td><a href="{row.get('Run URL','#')}" target="_blank">#{row['Run ID']}</a></td>
           <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
             {row['Workflow']}</td>
-          <td><span style="color:{COLORS['secondary']};">{row['Branch']}</span></td>
+          <td><span style="color:{COLORS['secondary']};font-weight:600;">{row['Branch']}</span></td>
           <td>{row['Actor']}</td>
           <td>{pill}</td>
           <td>{row['Event']}</td>
           <td>{row['Started']}</td>
           <td>{row['Duration']}</td>
-          <td style="font-family:monospace;font-size:.7rem;color:{COLORS['muted']};">
+          <td style="font-family:monospace;font-size:.72rem;color:{COLORS['muted']};">
             {row['Commit']}</td>
         </tr>"""
 
     st.markdown(f"""
+    <div class="table-wrap">
     <div style="overflow-x:auto;">
     <table class="modern-table">
       <thead><tr>
@@ -1376,82 +1535,84 @@ def render_runs_table(df: pd.DataFrame):
       <tbody>{rows_html}</tbody>
     </table>
     </div>
+    </div>
     """, unsafe_allow_html=True)
 
 
-def page_repositories(client: GitHubClient):
-    section_header("📁", "Repositories")
+def page_repositories(client):
+    section_header("folder", "Repositories")
     repos = st.session_state.repos
     if not repos:
         page_no_repo()
         return
 
-    search = st.text_input("🔎 Search repositories", placeholder="Filter by name…", key="repo_search")
+    search = st.text_input("Search repositories", placeholder="Filter by name...", key="repo_search")
     if search:
         repos = [r for r in repos if search.lower() in r["full_name"].lower()]
 
-    col_labels = st.columns([3, 1, 1, 1, 1, 1, 1])
-    for col, label in zip(col_labels, ["Repository", "Stars", "Forks", "Issues", "Visibility", "Language", "Updated"]):
-        col.markdown(f'<div style="font-size:.68rem;color:{COLORS["muted"]};text-transform:uppercase;'
-                     f'letter-spacing:.08em;">{label}</div>', unsafe_allow_html=True)
-
-    st.markdown('<hr style="border-color:#12344D;margin:.3rem 0 .5rem;"/>', unsafe_allow_html=True)
-
+    rows_html = ""
     for r in repos[:50]:
-        c = st.columns([3, 1, 1, 1, 1, 1, 1])
-        vis_color = COLORS["primary"] if r.get("private") else COLORS["success"]
         vis_label = "Private" if r.get("private") else "Public"
+        vis_pill_cls = "skipped" if r.get("private") else "success"
         upd = parse_iso(r.get("updated_at", ""))
-        with c[0]:
-            st.markdown(f'<a href="{r.get("html_url","#")}" target="_blank" '
-                        f'style="color:{COLORS["primary"]};font-weight:600;font-size:.85rem;">'
-                        f'{r["full_name"]}</a>'
-                        f'<div style="font-size:.7rem;color:{COLORS["muted"]};">'
-                        f'{(r.get("description") or "")[:60]}</div>', unsafe_allow_html=True)
-        with c[1]:
-            st.markdown(f'<span style="color:{COLORS["warning"]};">⭐ {r.get("stargazers_count",0)}</span>',
-                        unsafe_allow_html=True)
-        with c[2]:
-            st.write(r.get("forks_count", 0))
-        with c[3]:
-            st.write(r.get("open_issues_count", 0))
-        with c[4]:
-            st.markdown(f'<span class="pill pill-{"skipped" if r.get("private") else "success"}">'
-                        f'{vis_label}</span>', unsafe_allow_html=True)
-        with c[5]:
-            lang = r.get("language") or "—"
-            st.markdown(f'<code style="font-size:.7rem;">{lang}</code>', unsafe_allow_html=True)
-        with c[6]:
-            st.markdown(f'<span style="font-size:.72rem;color:{COLORS["muted"]};">'
-                        f'{upd.strftime("%b %d") if upd else "—"}</span>', unsafe_allow_html=True)
-        st.markdown('<hr style="border-color:rgba(18,52,77,0.3);margin:.2rem 0;"/>', unsafe_allow_html=True)
+        lang = r.get("language") or "\u2014"
+        desc = (r.get("description") or "")[:70]
+        rows_html += f"""
+        <tr>
+          <td style="min-width:240px;">
+            <a href="{r.get('html_url','#')}" target="_blank" style="font-size:.86rem;">
+              {r['full_name']}</a>
+            <div style="font-size:.72rem;color:{COLORS['muted']};margin-top:2px;">{desc}</div>
+          </td>
+          <td><span style="color:{COLORS['warning']};font-weight:600;">\u2605 {r.get('stargazers_count',0)}</span></td>
+          <td>{r.get('forks_count', 0)}</td>
+          <td>{r.get('open_issues_count', 0)}</td>
+          <td><span class="pill pill-{vis_pill_cls}">{vis_label}</span></td>
+          <td><code style="font-size:.72rem;">{lang}</code></td>
+          <td style="font-size:.74rem;color:{COLORS['muted']};white-space:nowrap;">
+            {upd.strftime('%b %d, %Y') if upd else '\u2014'}</td>
+        </tr>"""
+
+    st.markdown(f"""
+    <div class="table-wrap">
+    <div style="overflow-x:auto;">
+    <table class="modern-table">
+      <thead><tr>
+        <th>Repository</th><th>Stars</th><th>Forks</th><th>Issues</th>
+        <th>Visibility</th><th>Language</th><th>Updated</th>
+      </tr></thead>
+      <tbody>{rows_html}</tbody>
+    </table>
+    </div>
+    </div>
+    """, unsafe_allow_html=True)
 
 
-def page_workflows(client: GitHubClient, owner: str, repo: str):
-    section_header("⚙️", f"Workflows — {owner}/{repo}")
+def page_workflows(client, owner: str, repo: str):
+    section_header("workflow", f"Workflows \u2014 {owner}/{repo}")
     token = st.session_state.token
     workflows = cached_workflows(token, owner, repo)
 
     if not workflows:
-        st.markdown('<div class="empty-state"><div class="icon">⚙️</div>'
+        st.markdown(f'<div class="empty-state"><div class="icon-wrap">{icon("workflow")}</div>'
                     '<h4>No workflows found</h4>'
                     '<p>This repository has no GitHub Actions workflows.</p></div>',
                     unsafe_allow_html=True)
         return
 
     for wf in workflows:
-        state_color = COLORS["success"] if wf.get("state") == "active" else COLORS["muted"]
-        with st.expander(f"⚙️ {wf.get('name','Unnamed')} — {wf.get('path','')}"):
+        state = wf.get("state", "\u2014")
+        with st.expander(f"{wf.get('name','Unnamed')} \u2014 {wf.get('path','')}"):
             c1, c2, c3 = st.columns(3)
-            c1.metric("State", wf.get("state", "—").title())
-            c2.metric("ID", wf.get("id", "—"))
+            c1.metric("State", state.title())
+            c2.metric("ID", wf.get("id", "\u2014"))
             c3.markdown(f'<a href="{wf.get("html_url","#")}" target="_blank" '
-                        f'style="color:{COLORS["primary"]};">View on GitHub ↗</a>',
+                        f'style="color:{COLORS["primary"]};font-weight:600;">View on GitHub \u2197</a>',
                         unsafe_allow_html=True)
 
 
-def page_runs(client: GitHubClient, owner: str, repo: str):
-    section_header("🚀", f"Workflow Runs — {owner}/{repo}")
+def page_runs(client, owner: str, repo: str):
+    section_header("runs", f"Workflow Runs \u2014 {owner}/{repo}")
     token = st.session_state.token
 
     col1, col2, col3 = st.columns(3)
@@ -1471,13 +1632,13 @@ def page_runs(client: GitHubClient, owner: str, repo: str):
         runs = [r for r in runs if search_actor.lower() in r.get("actor",{}).get("login","").lower()]
 
     df = runs_to_df(runs)
-    st.markdown(f'<div style="font-size:.78rem;color:{COLORS["muted"]};margin-bottom:.5rem;">'
+    st.markdown(f'<div style="font-size:.8rem;color:{COLORS["muted"]};margin-bottom:.6rem;">'
                 f'Showing {len(df)} runs</div>', unsafe_allow_html=True)
     render_runs_table(df)
 
 
-def page_jobs(client: GitHubClient, owner: str, repo: str):
-    section_header("📋", f"Jobs — {owner}/{repo}")
+def page_jobs(client, owner: str, repo: str):
+    section_header("jobs", f"Jobs \u2014 {owner}/{repo}")
     token = st.session_state.token
     runs = cached_runs(token, owner, repo)
 
@@ -1491,14 +1652,14 @@ def page_jobs(client: GitHubClient, owner: str, repo: str):
 
     run_id = recent_run["id"]
     st.markdown(f'<div class="info-box">Showing jobs for latest run: '
-                f'<strong>#{run_id}</strong> — {recent_run.get("name","")}</div>',
+                f'<strong>#{run_id}</strong> \u2014 {recent_run.get("name","")}</div>',
                 unsafe_allow_html=True)
 
-    with st.spinner("Loading jobs…"):
+    with st.spinner("Loading jobs..."):
         jobs = client.get_jobs(owner, repo, run_id)
 
     if not jobs:
-        st.markdown('<div class="empty-state"><div class="icon">📋</div>'
+        st.markdown(f'<div class="empty-state"><div class="icon-wrap">{icon("jobs")}</div>'
                     '<h4>No jobs found</h4></div>', unsafe_allow_html=True)
         return
 
@@ -1509,21 +1670,18 @@ def page_jobs(client: GitHubClient, owner: str, repo: str):
         conclusion = job.get("conclusion") or job.get("status", "")
         pill = status_pill(job.get("status",""), job.get("conclusion"))
 
-        with st.expander(f"{pill} {job.get('name','Job')} — {duration_str(dur)}",
-                          expanded=False):
+        with st.expander(f"{job.get('name','Job')} \u2014 {duration_str(dur)}", expanded=False):
+            st.markdown(pill, unsafe_allow_html=True)
             c1, c2, c3, c4 = st.columns(4)
             c1.metric("Runner", job.get("runner_name") or "GitHub-hosted")
-            c2.metric("OS", (job.get("runner_group_name") or job.get("labels",[""])[0] or "—"))
+            c2.metric("OS", (job.get("runner_group_name") or job.get("labels",[""])[0] or "\u2014"))
             c3.metric("Duration", duration_str(dur))
-            c4.metric("Status", conclusion.title() if conclusion else "—")
+            c4.metric("Status", conclusion.title() if conclusion else "\u2014")
 
             steps = job.get("steps", [])
             if steps:
-                st.markdown(f'<div class="chart-title" style="margin-top:.5rem;">Steps</div>',
-                            unsafe_allow_html=True)
                 rows = ""
                 for step in steps:
-                    s_conc = step.get("conclusion") or step.get("status","")
                     s_pill = status_pill(step.get("status",""), step.get("conclusion"))
                     s_start = parse_iso(step.get("started_at"))
                     s_end   = parse_iso(step.get("completed_at"))
@@ -1536,15 +1694,17 @@ def page_jobs(client: GitHubClient, owner: str, repo: str):
                       <td>{duration_str(s_dur)}</td>
                     </tr>"""
                 st.markdown(f"""
+                <div class="table-wrap" style="margin-top:.6rem;">
                 <table class="modern-table" style="font-size:.78rem;">
                   <thead><tr><th>#</th><th>Step</th><th>Status</th><th>Duration</th></tr></thead>
                   <tbody>{rows}</tbody>
                 </table>
+                </div>
                 """, unsafe_allow_html=True)
 
 
-def page_analytics(client: GitHubClient, owner: str, repo: str):
-    section_header("📊", f"Analytics — {owner}/{repo}")
+def page_analytics(client, owner: str, repo: str):
+    section_header("analytics", f"Analytics \u2014 {owner}/{repo}")
     token = st.session_state.token
     runs = cached_runs(token, owner, repo, st.session_state.selected_branch)
     df = runs_to_df(runs)
@@ -1570,8 +1730,8 @@ def page_analytics(client: GitHubClient, owner: str, repo: str):
         st.markdown('</div>', unsafe_allow_html=True)
 
 
-def page_performance(client: GitHubClient, owner: str, repo: str):
-    section_header("📈", f"Performance — {owner}/{repo}")
+def page_performance(client, owner: str, repo: str):
+    section_header("perf", f"Performance \u2014 {owner}/{repo}")
     token = st.session_state.token
     runs = cached_runs(token, owner, repo, st.session_state.selected_branch)
     df = runs_to_df(runs)
@@ -1585,17 +1745,17 @@ def page_performance(client: GitHubClient, owner: str, repo: str):
 
     cols = st.columns(5)
     stats = [
-        ("⏱️", "Avg Duration",   duration_str(avg)),
-        ("📊", "Median",         duration_str(median)),
-        ("📈", "P95 Runtime",    duration_str(p95)),
-        ("🐇", "Fastest",        duration_str(fastest)),
-        ("🐢", "Slowest",        duration_str(slowest)),
+        ("perf",      "Avg Duration", duration_str(avg)),
+        ("analytics", "Median",       duration_str(median)),
+        ("api",       "P95 Runtime",  duration_str(p95)),
+        ("runs",      "Fastest",      duration_str(fastest)),
+        ("workflow",  "Slowest",      duration_str(slowest)),
     ]
-    for i, (icon, label, val) in enumerate(stats):
+    for i, (icn, label, val) in enumerate(stats):
         with cols[i]:
-            st.markdown(kpi_card(icon, label, val), unsafe_allow_html=True)
+            st.markdown(kpi_card(icn, label, val), unsafe_allow_html=True)
 
-    st.markdown("<br/>", unsafe_allow_html=True)
+    st.markdown("<div style='height:1rem'></div>", unsafe_allow_html=True)
 
     c1, c2 = st.columns(2)
     with c1:
@@ -1608,14 +1768,15 @@ def page_performance(client: GitHubClient, owner: str, repo: str):
         st.markdown('</div>', unsafe_allow_html=True)
 
 
-def page_runners(client: GitHubClient, owner: str, repo: str, self_hosted: bool = True):
+def page_runners(client, owner: str, repo: str, self_hosted: bool = True):
     label = "Self-Hosted Runners" if self_hosted else "GitHub-Hosted Runners"
-    section_header("🖥️" if self_hosted else "☁️", f"{label} — {owner}/{repo}")
+    icn = "server" if self_hosted else "cloud"
+    section_header(icn, f"{label} \u2014 {owner}/{repo}")
     runners = cached_runners(st.session_state.token, owner, repo)
 
     if self_hosted:
         runners = [r for r in runners if not any(
-            l.get("name","").startswith("ubuntu-") or l.get("name","").startswith("macos-") or l.get("name","").startswith("windows-")
+            l.get("name","").startswith(("ubuntu-","macos-","windows-"))
             for l in r.get("labels", [])
         )]
     else:
@@ -1625,11 +1786,10 @@ def page_runners(client: GitHubClient, owner: str, repo: str, self_hosted: bool 
         )]
 
     if not runners:
-        st.markdown(f'<div class="empty-state"><div class="icon">{"🖥️" if self_hosted else "☁️"}</div>'
+        st.markdown(f'<div class="empty-state"><div class="icon-wrap">{icon(icn)}</div>'
                     f'<h4>No {label.lower()} configured</h4>'
                     f'<p>Add runners in your repository settings.</p></div>',
                     unsafe_allow_html=True)
-        # Show org runners if available
         org = st.session_state.selected_org
         if org:
             org_runners = client.get_org_runners(org)
@@ -1642,17 +1802,16 @@ def page_runners(client: GitHubClient, owner: str, repo: str, self_hosted: bool 
         else:
             return
 
-    # Summary KPIs
     online = sum(1 for r in runners if r.get("status") == "online")
     offline = len(runners) - online
     busy = sum(1 for r in runners if r.get("busy"))
 
     c1, c2, c3 = st.columns(3)
-    with c1: st.markdown(kpi_card("🟢", "Online", online), unsafe_allow_html=True)
-    with c2: st.markdown(kpi_card("🔴", "Offline", offline), unsafe_allow_html=True)
-    with c3: st.markdown(kpi_card("⚡", "Busy", busy), unsafe_allow_html=True)
+    with c1: st.markdown(kpi_card("server", "Online", online), unsafe_allow_html=True)
+    with c2: st.markdown(kpi_card("api", "Offline", offline), unsafe_allow_html=True)
+    with c3: st.markdown(kpi_card("perf", "Busy", busy), unsafe_allow_html=True)
 
-    st.markdown("<br/>", unsafe_allow_html=True)
+    st.markdown("<div style='height:1rem'></div>", unsafe_allow_html=True)
 
     c_chart, c_table = st.columns([1, 2])
     with c_chart:
@@ -1665,32 +1824,34 @@ def page_runners(client: GitHubClient, owner: str, repo: str, self_hosted: bool 
             status = r.get("status", "offline")
             scls = "success" if status == "online" else "failure"
             labels = ", ".join(l.get("name","") for l in r.get("labels",[]))
-            busy_s = "⚡ Busy" if r.get("busy") else "💤 Idle"
+            busy_s = "Busy" if r.get("busy") else "Idle"
             rows += f"""
             <tr>
               <td>{r.get('name','')}</td>
               <td><span class="pill pill-{scls}">{status}</span></td>
               <td>{busy_s}</td>
-              <td style="font-size:.7rem;color:{COLORS['muted']};">{labels[:40]}</td>
+              <td style="font-size:.72rem;color:{COLORS['muted']};">{labels[:40]}</td>
               <td>{r.get('id','')}</td>
             </tr>"""
         st.markdown(f"""
+        <div class="table-wrap">
         <div style="overflow-x:auto;">
         <table class="modern-table">
           <thead><tr><th>Runner</th><th>Status</th><th>Activity</th><th>Labels</th><th>ID</th></tr></thead>
           <tbody>{rows}</tbody>
         </table>
         </div>
+        </div>
         """, unsafe_allow_html=True)
 
 
-def page_artifacts(client: GitHubClient, owner: str, repo: str):
-    section_header("📦", f"Artifacts — {owner}/{repo}")
+def page_artifacts(client, owner: str, repo: str):
+    section_header("artifact", f"Artifacts \u2014 {owner}/{repo}")
     token = st.session_state.token
     artifacts = cached_artifacts(token, owner, repo)
 
     if not artifacts:
-        st.markdown('<div class="empty-state"><div class="icon">📦</div>'
+        st.markdown(f'<div class="empty-state"><div class="icon-wrap">{icon("artifact")}</div>'
                     '<h4>No artifacts found</h4>'
                     '<p>Artifacts are generated by your workflows.</p></div>',
                     unsafe_allow_html=True)
@@ -1698,10 +1859,10 @@ def page_artifacts(client: GitHubClient, owner: str, repo: str):
 
     total_size = sum(a.get("size_in_bytes", 0) for a in artifacts)
     c1, c2 = st.columns(2)
-    with c1: st.markdown(kpi_card("📦", "Total Artifacts", len(artifacts)), unsafe_allow_html=True)
-    with c2: st.markdown(kpi_card("💾", "Total Storage", fmt_bytes(total_size)), unsafe_allow_html=True)
+    with c1: st.markdown(kpi_card("artifact", "Total Artifacts", len(artifacts)), unsafe_allow_html=True)
+    with c2: st.markdown(kpi_card("cache", "Total Storage", fmt_bytes(total_size)), unsafe_allow_html=True)
 
-    st.markdown("<br/>", unsafe_allow_html=True)
+    st.markdown("<div style='height:1rem'></div>", unsafe_allow_html=True)
     rows = ""
     for a in artifacts[:50]:
         created = parse_iso(a.get("created_at",""))
@@ -1712,28 +1873,30 @@ def page_artifacts(client: GitHubClient, owner: str, repo: str):
         <tr>
           <td><strong>{a.get('name','')}</strong></td>
           <td>{fmt_bytes(a.get('size_in_bytes',0))}</td>
-          <td>{created.strftime('%Y-%m-%d') if created else '—'}</td>
-          <td>{expires.strftime('%Y-%m-%d') if expires else '—'}</td>
+          <td>{created.strftime('%Y-%m-%d') if created else '\u2014'}</td>
+          <td>{expires.strftime('%Y-%m-%d') if expires else '\u2014'}</td>
           <td><span class="pill pill-{exp_class}">{'Expired' if expired else 'Active'}</span></td>
           <td>{a.get('id','')}</td>
         </tr>"""
     st.markdown(f"""
+    <div class="table-wrap">
     <div style="overflow-x:auto;">
     <table class="modern-table">
       <thead><tr><th>Name</th><th>Size</th><th>Created</th><th>Expires</th><th>Status</th><th>ID</th></tr></thead>
       <tbody>{rows}</tbody>
     </table>
     </div>
+    </div>
     """, unsafe_allow_html=True)
 
 
-def page_cache(client: GitHubClient, owner: str, repo: str):
-    section_header("📂", f"Cache — {owner}/{repo}")
+def page_cache(client, owner: str, repo: str):
+    section_header("cache", f"Cache \u2014 {owner}/{repo}")
     token = st.session_state.token
     caches = cached_caches(token, owner, repo)
 
     if not caches:
-        st.markdown('<div class="empty-state"><div class="icon">📂</div>'
+        st.markdown(f'<div class="empty-state"><div class="icon-wrap">{icon("cache")}</div>'
                     '<h4>No caches found</h4>'
                     '<p>Workflow caches speed up your CI/CD pipelines.</p></div>',
                     unsafe_allow_html=True)
@@ -1741,10 +1904,10 @@ def page_cache(client: GitHubClient, owner: str, repo: str):
 
     total_size = sum(c.get("size_in_bytes", 0) for c in caches)
     c1, c2 = st.columns(2)
-    with c1: st.markdown(kpi_card("📂", "Cache Entries", len(caches)), unsafe_allow_html=True)
-    with c2: st.markdown(kpi_card("💾", "Total Size", fmt_bytes(total_size)), unsafe_allow_html=True)
+    with c1: st.markdown(kpi_card("cache", "Cache Entries", len(caches)), unsafe_allow_html=True)
+    with c2: st.markdown(kpi_card("artifact", "Total Size", fmt_bytes(total_size)), unsafe_allow_html=True)
 
-    st.markdown("<br/>", unsafe_allow_html=True)
+    st.markdown("<div style='height:1rem'></div>", unsafe_allow_html=True)
     rows = ""
     for c in caches[:50]:
         last_accessed = parse_iso(c.get("last_accessed_at",""))
@@ -1754,53 +1917,57 @@ def page_cache(client: GitHubClient, owner: str, repo: str):
           <td><code style="font-size:.75rem;">{c.get('key','')}</code></td>
           <td>{c.get('ref','')}</td>
           <td>{fmt_bytes(c.get('size_in_bytes',0))}</td>
-          <td>{created.strftime('%Y-%m-%d') if created else '—'}</td>
-          <td>{last_accessed.strftime('%Y-%m-%d') if last_accessed else '—'}</td>
+          <td>{created.strftime('%Y-%m-%d') if created else '\u2014'}</td>
+          <td>{last_accessed.strftime('%Y-%m-%d') if last_accessed else '\u2014'}</td>
         </tr>"""
     st.markdown(f"""
+    <div class="table-wrap">
     <div style="overflow-x:auto;">
     <table class="modern-table">
       <thead><tr><th>Key</th><th>Ref</th><th>Size</th><th>Created</th><th>Last Accessed</th></tr></thead>
       <tbody>{rows}</tbody>
     </table>
     </div>
+    </div>
     """, unsafe_allow_html=True)
 
 
-def page_security(client: GitHubClient, owner: str, repo: str):
-    section_header("🔐", f"Security — {owner}/{repo}")
+def page_security(client, owner: str, repo: str):
+    section_header("security", f"Security \u2014 {owner}/{repo}")
     token = st.session_state.token
     secrets = cached_secrets(token, owner, repo)
     variables = client.get_variables(owner, repo)
 
     c1, c2 = st.columns(2)
-    with c1: st.markdown(kpi_card("🔑", "Secrets", len(secrets)), unsafe_allow_html=True)
-    with c2: st.markdown(kpi_card("📝", "Variables", len(variables)), unsafe_allow_html=True)
+    with c1: st.markdown(kpi_card("security", "Secrets", len(secrets)), unsafe_allow_html=True)
+    with c2: st.markdown(kpi_card("settings", "Variables", len(variables)), unsafe_allow_html=True)
 
-    st.markdown("<br/>", unsafe_allow_html=True)
+    st.markdown("<div style='height:1rem'></div>", unsafe_allow_html=True)
 
     col1, col2 = st.columns(2)
     with col1:
-        section_header("🔑", "Repository Secrets")
+        section_header("security", "Repository Secrets")
         if secrets:
             rows = "".join(f"""
             <tr>
-              <td>🔒 {s.get('name','')}</td>
-              <td style="font-size:.7rem;color:{COLORS['muted']};">
-                {parse_iso(s.get('updated_at','')).strftime('%Y-%m-%d') if parse_iso(s.get('updated_at','')) else '—'}
+              <td>{s.get('name','')}</td>
+              <td style="font-size:.72rem;color:{COLORS['muted']};">
+                {parse_iso(s.get('updated_at','')).strftime('%Y-%m-%d') if parse_iso(s.get('updated_at','')) else '\u2014'}
               </td>
             </tr>""" for s in secrets)
             st.markdown(f"""
+            <div class="table-wrap">
             <table class="modern-table">
               <thead><tr><th>Secret Name</th><th>Last Updated</th></tr></thead>
               <tbody>{rows}</tbody>
             </table>
+            </div>
             """, unsafe_allow_html=True)
         else:
             st.markdown('<div class="info-box">No secrets configured.</div>', unsafe_allow_html=True)
 
     with col2:
-        section_header("📝", "Variables")
+        section_header("settings", "Variables")
         if variables:
             rows = "".join(f"""
             <tr>
@@ -1808,17 +1975,19 @@ def page_security(client: GitHubClient, owner: str, repo: str):
               <td style="font-family:monospace;font-size:.75rem;">{str(v.get('value',''))[:40]}</td>
             </tr>""" for v in variables)
             st.markdown(f"""
+            <div class="table-wrap">
             <table class="modern-table">
               <thead><tr><th>Variable</th><th>Value</th></tr></thead>
               <tbody>{rows}</tbody>
             </table>
+            </div>
             """, unsafe_allow_html=True)
         else:
             st.markdown('<div class="info-box">No variables configured.</div>', unsafe_allow_html=True)
 
 
-def page_reports(client: GitHubClient, owner: str, repo: str):
-    section_header("📄", f"Reports — {owner}/{repo}")
+def page_reports(client, owner: str, repo: str):
+    section_header("reports", f"Reports \u2014 {owner}/{repo}")
     token = st.session_state.token
 
     st.markdown('<div class="info-box">Generate and export analytics reports for this repository.</div>',
@@ -1829,32 +1998,31 @@ def page_reports(client: GitHubClient, owner: str, repo: str):
     with col1:
         fmt = st.selectbox("Export Format", ["CSV", "JSON", "Excel"])
 
-    if st.button("📥 Generate Report", use_container_width=False):
-        with st.spinner("Generating report…"):
+    if st.button("Generate Report", use_container_width=False):
+        with st.spinner("Generating report..."):
             runs = cached_runs(token, owner, repo)
             df = runs_to_df(runs)
-            # Drop internal cols
             export_df = df.drop(columns=[c for c in df.columns if c.startswith("_")], errors="ignore")
 
             if fmt == "CSV":
                 data = export_df.to_csv(index=False).encode("utf-8")
-                st.download_button("⬇️ Download CSV", data, "gh_actions_report.csv", "text/csv")
+                st.download_button("Download CSV", data, "gh_actions_report.csv", "text/csv")
             elif fmt == "JSON":
                 data = export_df.to_json(orient="records", indent=2).encode("utf-8")
-                st.download_button("⬇️ Download JSON", data, "gh_actions_report.json", "application/json")
+                st.download_button("Download JSON", data, "gh_actions_report.json", "application/json")
             elif fmt == "Excel":
                 buf = io.BytesIO()
                 with pd.ExcelWriter(buf, engine="openpyxl") as writer:
                     export_df.to_excel(writer, index=False, sheet_name="Workflow Runs")
-                st.download_button("⬇️ Download Excel", buf.getvalue(),
+                st.download_button("Download Excel", buf.getvalue(),
                                    "gh_actions_report.xlsx",
                                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
-        st.success("✅ Report ready for download!")
+        st.success("Report ready for download!")
 
 
-def page_api_monitor(client: GitHubClient):
-    section_header("📡", "GitHub API Monitor")
+def page_api_monitor(client):
+    section_header("api", "GitHub API Monitor")
     token = st.session_state.token
     rl = cached_rate_limit(token)
 
@@ -1871,17 +2039,30 @@ def page_api_monitor(client: GitHubClient):
     pct_remaining = 100 - pct_used
 
     c1, c2, c3, c4 = st.columns(4)
-    with c1: st.markdown(kpi_card("📡", "API Limit", limit), unsafe_allow_html=True)
-    with c2: st.markdown(kpi_card("✅", "Remaining", remaining, None, pct_remaining > 20), unsafe_allow_html=True)
-    with c3: st.markdown(kpi_card("📊", "Used", used), unsafe_allow_html=True)
-    with c4: st.markdown(kpi_card("🕐", "Resets At",
-                                   reset_dt.strftime("%H:%M UTC") if reset_dt else "—"),
+    with c1: st.markdown(kpi_card("api", "API Limit", limit), unsafe_allow_html=True)
+    with c2: st.markdown(kpi_card("workflow", "Remaining", remaining, None, pct_remaining > 20), unsafe_allow_html=True)
+    with c3: st.markdown(kpi_card("analytics", "Used", used), unsafe_allow_html=True)
+    with c4: st.markdown(kpi_card("perf", "Resets At",
+                                   reset_dt.strftime("%H:%M UTC") if reset_dt else "\u2014"),
                           unsafe_allow_html=True)
 
-    st.markdown("<br/>", unsafe_allow_html=True)
+    st.markdown("<div style='height:1rem'></div>", unsafe_allow_html=True)
 
-    # Gauge
-    bar_color = COLORS["success"] if pct_remaining > 50 else (COLORS["warning"] if pct_remaining > 20 else COLORS["danger"])
+    fill_color = COLORS["success"] if pct_remaining > 50 else (COLORS["warning"] if pct_remaining > 20 else COLORS["danger"])
+    st.markdown(f"""
+    <div class="chart-card">
+      <div style="font-size:.85rem;font-weight:700;color:{COLORS['text']};margin-bottom:.7rem;">
+        API Rate Limit Utilization
+      </div>
+      <div class="bar-track">
+        <div class="bar-fill" style="width:{pct_used:.1f}%;background:linear-gradient(90deg,{fill_color},{COLORS['primary']});"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-top:.5rem;font-size:.78rem;color:{COLORS['muted']};">
+        <span>{used} used</span><span>{remaining} remaining of {limit}</span>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
     fig = go.Figure(go.Bar(
         x=[used, remaining],
         y=["API Usage", "API Usage"],
@@ -1891,7 +2072,7 @@ def page_api_monitor(client: GitHubClient):
         textposition="inside",
     ))
     fig.update_layout(
-        title=dict(text="API Rate Limit Utilization", font=dict(size=13, color=COLORS["primary"])),
+        title=dict(text="Usage Breakdown", font=dict(size=13, color=COLORS["text"])),
         barmode="stack", xaxis_range=[0, limit],
         height=120, margin=dict(l=20, r=20, t=40, b=20),
     )
@@ -1900,49 +2081,49 @@ def page_api_monitor(client: GitHubClient):
     st.markdown('</div>', unsafe_allow_html=True)
 
     if pct_remaining < 10:
-        st.markdown(f'<div class="error-box">⚠️ API rate limit critically low! '
+        st.markdown(f'<div class="error-box">API rate limit critically low! '
                     f'Resets at {reset_dt.strftime("%H:%M UTC") if reset_dt else "unknown"}.</div>',
                     unsafe_allow_html=True)
 
 
 def page_settings():
-    section_header("⚙️", "Settings")
+    section_header("settings", "Settings")
     user = st.session_state.get("user", {}) or {}
     token = st.session_state.token
 
-    with st.expander("👤 Account", expanded=True):
+    with st.expander("Account", expanded=True):
         c1, c2 = st.columns([1, 4])
         with c1:
             if user.get("avatar_url"):
                 st.image(user["avatar_url"], width=60)
         with c2:
             st.markdown(f"""
-            **Login:** {user.get('login','—')}  
-            **Name:** {user.get('name','—')}  
-            **Company:** {user.get('company','—')}  
-            **Email:** {user.get('email','—')}  
+            **Login:** {user.get('login','\u2014')}  
+            **Name:** {user.get('name','\u2014')}  
+            **Company:** {user.get('company','\u2014')}  
+            **Email:** {user.get('email','\u2014')}  
             """)
 
-    with st.expander("🔌 Connection"):
+    with st.expander("Connection"):
         st.markdown(f"**API Endpoint:** `{st.session_state.get('base_url', GITHUB_API)}`")
         st.markdown(f"**Token:** `{'*' * 20}{token[-4:] if len(token) >= 4 else '****'}`")
         rl = cached_rate_limit(token)
         if rl:
             st.markdown(f"**Rate Limit:** {rl.get('remaining','?')}/{rl.get('limit','?')} remaining")
 
-    with st.expander("ℹ️ About"):
+    with st.expander("About"):
         st.markdown("""
         **GitHub Actions Analytics Dashboard**  
         Enterprise-grade CI/CD observability platform  
-        
-        Built with: Python · Streamlit · Plotly · GitHub REST & GraphQL APIs  
-        Version: 1.0.0
+
+        Built with: Python &middot; Streamlit &middot; Plotly &middot; GitHub REST & GraphQL APIs  
+        Version: 2.0.0 -- Porcelain & Cobalt
         """)
 
 
-# ──────────────────────────────────────────────────────────────────────────────
+# --------------------------------------------------------------------------------
 # MAIN APP
-# ──────────────────────────────────────────────────────────────────────────────
+# --------------------------------------------------------------------------------
 def main():
     init_session()
     inject_css()
@@ -1952,23 +2133,22 @@ def main():
     client = get_client()
     token  = st.session_state.token
 
-    # Top navbar
     if client and token:
         user = st.session_state.user or {}
         rl   = cached_rate_limit(token)
         render_navbar(user, rl)
 
-    # No token → landing
     if not token or not client:
         page_not_connected()
         return
 
     page = st.session_state.page
 
-    # Pages that need repo context
-    repo_pages = {"Dashboard", "Workflows", "Workflow Runs", "Jobs", "Analytics",
-                  "Performance", "Self-Hosted Runners", "GitHub Runners",
-                  "Artifacts", "Cache", "Security", "Reports"}
+    repo_pages = {
+        "Dashboard", "Workflows", "Workflow Runs", "Jobs", "Analytics",
+        "Performance", "Self-Hosted Runners", "GitHub Runners",
+        "Artifacts", "Cache", "Security", "Reports"
+    }
 
     owner = repo_name = None
     if page in repo_pages:
@@ -1978,7 +2158,6 @@ def main():
             return
         owner, repo_name = sel.split("/", 1)
 
-    # Route
     if page == "Dashboard":
         page_dashboard(client, owner, repo_name)
     elif page == "Repositories":
