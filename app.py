@@ -1558,20 +1558,26 @@ def page_repositories(client):
         lang = r.get("language") or "\u2014"
         desc = (r.get("description") or "")[:70]
         rows_html += f"""
-        <tr>
-          <td style="min-width:240px;">
-            <a href="{r.get('html_url','#')}" target="_blank" style="font-size:.86rem;">
-              {r['full_name']}</a>
-            <div style="font-size:.72rem;color:{COLORS['muted']};margin-top:2px;">{desc}</div>
-          </td>
-          <td><span style="color:{COLORS['warning']};font-weight:600;">\u2605 {r.get('stargazers_count',0)}</span></td>
-          <td>{r.get('forks_count', 0)}</td>
-          <td>{r.get('open_issues_count', 0)}</td>
-          <td><span class="pill pill-{vis_pill_cls}">{vis_label}</span></td>
-          <td><code style="font-size:.72rem;">{lang}</code></td>
-          <td style="font-size:.74rem;color:{COLORS['muted']};white-space:nowrap;">{updated_text}</td>
-            {upd.strftime('%b %d, %Y') if upd else '—'}</td>
-        </tr>"""
+<tr>
+  <td style="min-width:240px;">
+    <a href="{r.get('html_url','#')}" target="_blank" style="font-size:.86rem;">
+      {r['full_name']}
+    </a>
+    <div style="font-size:.72rem;color:{COLORS['muted']};margin-top:2px;">
+      {desc}
+    </div>
+  </td>
+
+  <td><span style="color:{COLORS['warning']};font-weight:600;">★ {r.get('stargazers_count',0)}</span></td>
+  <td>{r.get('forks_count', 0)}</td>
+  <td>{r.get('open_issues_count', 0)}</td>
+  <td><span class="pill pill-{vis_pill_cls}">{vis_label}</span></td>
+  <td><code style="font-size:.72rem;">{lang}</code></td>
+
+  <td style="font-size:.74rem;color:{COLORS['muted']};white-space:nowrap;">
+    {upd.strftime('%b %d, %Y') if upd else '—'}
+  </td>
+</tr>
 
     st.markdown(f"""
     <div class="table-wrap">
