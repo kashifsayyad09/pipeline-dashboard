@@ -50,6 +50,7 @@ COLORS = {
     "muted":      "#5B6B85",   # slate -- secondary text
 }
 
+MDASH = "—"  # em-dash — safe to use in f-string expressions (no backslash needed)
 PAGES = [
     ("home", "Dashboard"),
     ("folder", "Repositories"),
@@ -1558,26 +1559,20 @@ def page_repositories(client):
         lang = r.get("language") or "\u2014"
         desc = (r.get("description") or "")[:70]
         rows_html += f"""
-<tr>
-  <td style="min-width:240px;">
-    <a href="{r.get('html_url','#')}" target="_blank" style="font-size:.86rem;">
-      {r['full_name']}
-    </a>
-    <div style="font-size:.72rem;color:{COLORS['muted']};margin-top:2px;">
-      {desc}
-    </div>
-  </td>
-
-  <td><span style="color:{COLORS['warning']};font-weight:600;">★ {r.get('stargazers_count',0)}</span></td>
-  <td>{r.get('forks_count', 0)}</td>
-  <td>{r.get('open_issues_count', 0)}</td>
-  <td><span class="pill pill-{vis_pill_cls}">{vis_label}</span></td>
-  <td><code style="font-size:.72rem;">{lang}</code></td>
-
-  <td style="font-size:.74rem;color:{COLORS['muted']};white-space:nowrap;">
-    {upd.strftime('%b %d, %Y') if upd else '—'}
-  </td>
-</tr>
+        <tr>
+          <td style="min-width:240px;">
+            <a href="{r.get('html_url','#')}" target="_blank" style="font-size:.86rem;">
+              {r['full_name']}</a>
+            <div style="font-size:.72rem;color:{COLORS['muted']};margin-top:2px;">{desc}</div>
+          </td>
+          <td><span style="color:{COLORS['warning']};font-weight:600;">\u2605 {r.get('stargazers_count',0)}</span></td>
+          <td>{r.get('forks_count', 0)}</td>
+          <td>{r.get('open_issues_count', 0)}</td>
+          <td><span class="pill pill-{vis_pill_cls}">{vis_label}</span></td>
+          <td><code style="font-size:.72rem;">{lang}</code></td>
+          <td style="font-size:.74rem;color:{COLORS['muted']};white-space:nowrap;">
+            {upd.strftime('%b %d, %Y') if upd else MDASH}</td>
+        </tr>"""
 
     st.markdown(f"""
     <div class="table-wrap">
@@ -1879,8 +1874,8 @@ def page_artifacts(client, owner: str, repo: str):
         <tr>
           <td><strong>{a.get('name','')}</strong></td>
           <td>{fmt_bytes(a.get('size_in_bytes',0))}</td>
-          <td>{created.strftime('%Y-%m-%d') if created else '\u2014'}</td>
-          <td>{expires.strftime('%Y-%m-%d') if expires else '\u2014'}</td>
+          <td>{created.strftime('%Y-%m-%d') if created else MDASH}</td>
+          <td>{expires.strftime('%Y-%m-%d') if expires else MDASH}</td>
           <td><span class="pill pill-{exp_class}">{'Expired' if expired else 'Active'}</span></td>
           <td>{a.get('id','')}</td>
         </tr>"""
@@ -1923,8 +1918,8 @@ def page_cache(client, owner: str, repo: str):
           <td><code style="font-size:.75rem;">{c.get('key','')}</code></td>
           <td>{c.get('ref','')}</td>
           <td>{fmt_bytes(c.get('size_in_bytes',0))}</td>
-          <td>{created.strftime('%Y-%m-%d') if created else '\u2014'}</td>
-          <td>{last_accessed.strftime('%Y-%m-%d') if last_accessed else '\u2014'}</td>
+          <td>{created.strftime('%Y-%m-%d') if created else MDASH}</td>
+          <td>{last_accessed.strftime('%Y-%m-%d') if last_accessed else MDASH}</td>
         </tr>"""
     st.markdown(f"""
     <div class="table-wrap">
@@ -1958,7 +1953,7 @@ def page_security(client, owner: str, repo: str):
             <tr>
               <td>{s.get('name','')}</td>
               <td style="font-size:.72rem;color:{COLORS['muted']};">
-                {parse_iso(s.get('updated_at','')).strftime('%Y-%m-%d') if parse_iso(s.get('updated_at','')) else '\u2014'}
+                {parse_iso(s.get('updated_at','')).strftime('%Y-%m-%d') if parse_iso(s.get('updated_at','')) else MDASH}
               </td>
             </tr>""" for s in secrets)
             st.markdown(f"""
@@ -2104,10 +2099,10 @@ def page_settings():
                 st.image(user["avatar_url"], width=60)
         with c2:
             st.markdown(f"""
-            **Login:** {user.get('login','\u2014')}  
-            **Name:** {user.get('name','\u2014')}  
-            **Company:** {user.get('company','\u2014')}  
-            **Email:** {user.get('email','\u2014')}  
+            **Login:** {user.get('login', MDASH)}  
+            **Name:** {user.get('name', MDASH)}  
+            **Company:** {user.get('company', MDASH)}  
+            **Email:** {user.get('email', MDASH)}  
             """)
 
     with st.expander("Connection"):
