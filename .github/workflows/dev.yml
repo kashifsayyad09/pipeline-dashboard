@@ -17,12 +17,22 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
+      - name: SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@v5
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: http://100.54.200.141:9000
+        with:
+          args: >
+            -Dsonar.projectKey=dashboard-pipeline
+            -Dsonar.sources=.  
+
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::885629328459:role/openID
           aws-region: us-east-1
-
+      
       - name: Deploy to EC2 using SSM
         shell: bash
         run: |
