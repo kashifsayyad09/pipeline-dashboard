@@ -1569,8 +1569,8 @@ def page_repositories(client):
           <td>{r.get('open_issues_count', 0)}</td>
           <td><span class="pill pill-{vis_pill_cls}">{vis_label}</span></td>
           <td><code style="font-size:.72rem;">{lang}</code></td>
-          <td style="font-size:.74rem;color:{COLORS['muted']};white-space:nowrap;">
-            {upd.strftime('%b %d, %Y') if upd else '\u2014'}</td>
+          <td style="font-size:.74rem;color:{COLORS['muted']};white-space:nowrap;">{updated_text}</td>
+            {upd.strftime('%b %d, %Y') if upd else '—'}</td>
         </tr>"""
 
     st.markdown(f"""
